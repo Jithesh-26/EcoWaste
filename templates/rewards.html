@@ -2,7 +2,63 @@
 {% block title %}Rewards | EcoReward{% endblock %}
 {% block content %}
 <div class="app-shell">
-  <aside class="sidebar"><a class="logo" href="/dashboard">eco<span>reward</span></a><nav><a href="/dashboard">▦ <span>Dashboard</span></a><a href="/deposit">♻ <span>Deposit waste</span></a><a href="/activity">◷ <span>My activity</span></a><a class="active" href="/rewards">◎ <span>Rewards</span></a></nav><a class="logout" href="/logout">← <span>Log out</span></a></aside>
-  <main class="content"><header><div><p class="eyebrow green">SPEND YOUR POINTS</p><h1>Rewards</h1><p class="muted">Choose a reward when you have enough points.</p></div><a class="profile" href="#">[[INITIAL]]</a></header><section class="points-banner"><span>★</span><div><p>Your available balance</p><strong>[[POINTS]] points</strong></div></section><p class="form-message">[[MESSAGE]]</p><section class="reward-grid">[[CARDS]]</section></main>
+  <aside class="sidebar">
+    <a class="logo" href="/dashboard">eco<span>reward</span></a>
+    <nav>
+      <a href="/dashboard">▦ <span>Dashboard</span></a>
+      <a href="/deposit">♻ <span>Deposit waste</span></a>
+      <a href="/activity">◷ <span>My activity</span></a>
+      <a class="active" href="/rewards">◎ <span>Rewards</span></a>
+    </nav>
+    <a class="logout" href="/logout">← <span>Log out</span></a>
+  </aside>
+
+  <main class="content">
+    <header>
+      <div>
+        <p class="eyebrow green">SPEND YOUR POINTS</p>
+        <h1>Rewards Catalog</h1>
+        <p class="muted">Redeem your hard-earned points for eco-friendly products and discounts.</p>
+      </div>
+      <a class="profile" href="#">[[INITIAL]]</a>
+    </header>
+
+    <section class="points-banner">
+      <span>★</span>
+      <div>
+        <p>Your Available Balance</p>
+        <strong>[[POINTS]] points</strong>
+      </div>
+    </section>
+
+    <p class="form-message" style="margin: 15px 0; font-weight: 600; color: #22c55e;">[[MESSAGE]]</p>
+
+    <section class="reward-grid">
+      [[CARDS]]
+    </section>
+
+    <section class="panel" style="margin-top: 30px;">
+      <div class="panel-heading">
+        <div>
+          <h2>🎉 My Claimed Rewards</h2>
+          <p class="muted">List of rewards you have redeemed.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Reward Item</th>
+              <th>Points Used</th>
+              <th>Date Claimed</th>
+            </tr>
+          </thead>
+          <tbody>
+            [[MY_CLAIMED_REWARDS]]
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 </div>
 {% endblock %}

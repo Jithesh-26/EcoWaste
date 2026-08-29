@@ -2,7 +2,75 @@
 {% block title %}My Activity | EcoReward{% endblock %}
 {% block content %}
 <div class="app-shell">
-  <aside class="sidebar"><a class="logo" href="/dashboard">eco<span>reward</span></a><nav><a href="/dashboard">▦ <span>Dashboard</span></a><a href="/deposit">♻ <span>Deposit waste</span></a><a class="active" href="/activity">◷ <span>My activity</span></a><a href="/rewards">◎ <span>Rewards</span></a></nav><a class="logout" href="/logout">← <span>Log out</span></a></aside>
-  <main class="content"><header><div><p class="eyebrow green">YOUR RECORD</p><h1>My activity</h1><p class="muted">All waste deposits saved in your account.</p></div><a class="profile" href="#">[[INITIAL]]</a></header><section class="panel"><div class="panel-heading"><div><h2>Deposit history</h2><p class="muted">Each deposit earns points based on its type and weight.</p></div><a class="button" href="/deposit">New deposit</a></div><div class="table-wrap"><table><thead><tr><th>Waste type</th><th>Weight</th><th>Points</th><th>Date</th></tr></thead><tbody>[[ROWS]]</tbody></table></div></section></main>
+  <aside class="sidebar">
+    <a class="logo" href="/dashboard">eco<span>reward</span></a>
+    <nav>
+      <a href="/dashboard">▦ <span>Dashboard</span></a>
+      <a href="/deposit">♻ <span>Deposit waste</span></a>
+      <a class="active" href="/activity">◷ <span>My activity</span></a>
+      <a href="/rewards">◎ <span>Rewards</span></a>
+    </nav>
+    <a class="logout" href="/logout">← <span>Log out</span></a>
+  </aside>
+
+  <main class="content">
+    <header>
+      <div>
+        <p class="eyebrow green">YOUR RECORD</p>
+        <h1>My Activity</h1>
+        <p class="muted">Complete log of all waste deposits and reward redemptions saved in your account.</p>
+      </div>
+      <a class="profile" href="#">[[INITIAL]]</a>
+    </header>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>♻ Waste Deposit History</h2>
+          <p class="muted">Each deposit earns points based on material category and weight.</p>
+        </div>
+        <a class="button" href="/deposit">New deposit <span>+</span></a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Waste type</th>
+              <th>Weight</th>
+              <th>Points Earned</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            [[ROWS]]
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 30px;">
+      <div class="panel-heading">
+        <div>
+          <h2>🎁 Reward Redemption History</h2>
+          <p class="muted">Claimed coupons and eco rewards.</p>
+        </div>
+        <a class="button secondary" href="/rewards">Browse rewards <span>→</span></a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Reward Claimed</th>
+              <th>Points Spent</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            [[REDEMPTIONS_ROWS]]
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 </div>
 {% endblock %}

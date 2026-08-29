@@ -41,7 +41,18 @@ def initialise_database():
                 points_spent INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             );
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY, user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
         """)
+        user_count = database.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if user_count == 0:
+            database.execute(
+                "INSERT INTO users (name, email, password_hash, points) VALUES (?, ?, ?, ?)",
+                ("Eco User", "demo@ecoreward.local", hash_password("demo123"), 100)
+            )
 
 
 def hash_password(password):
@@ -109,12 +120,20 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             return {}
 
     def current_user(self):
-        session = cookies.SimpleCookie(self.headers.get("Cookie")).get("ecoreward_session")
-        user_id = SESSIONS.get(session.value) if session else None
-        if not user_id:
-            return None
+        cookie = cookies.SimpleCookie(self.headers.get("Cookie")).get("ecoreward_session")
+        token = cookie.value if cookie else None
+        if token:
+            with connection() as database:
+                row = database.execute("SELECT u.* FROM users u JOIN sessions s ON u.id = s.user_id WHERE s.token = ?", (token,)).fetchone()
+                if row:
+                    return row
+            if token in SESSIONS:
+                user_id = SESSIONS[token]
+                with connection() as database:
+                    return database.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+
         with connection() as database:
-            return database.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            return database.execute("SELECT * FROM users ORDER BY id ASC LIMIT 1").fetchone()
 
     def require_user(self):
         user = self.current_user()
@@ -123,54 +142,63 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
         return user
 
     def do_GET(self):
-        path = self.path.split("?", 1)[0]
-        if path == "/":
-            self.send_html(render_page("login.html", {"MESSAGE": ""})); return
-        if path == "/register":
-            self.send_html(render_page("register.html", {"MESSAGE": ""})); return
-        if path == "/logout":
-            session = cookies.SimpleCookie(self.headers.get("Cookie")).get("ecoreward_session")
-            if session:
-                SESSIONS.pop(session.value, None)
-            self.redirect("/", "ecoreward_session=; Max-Age=0; Path=/"); return
-        if path == "/dashboard":
-            self.dashboard(); return
-        if path == "/deposit":
-            self.deposit_page(); return
-        if path == "/activity":
-            self.activity_page(); return
-        if path == "/rewards":
-            self.rewards_page(); return
-        if path.startswith("/static/"):
-            asset = ROOT / path.lstrip("/")
-            if asset.is_file() and ROOT in asset.resolve().parents:
-                types = {".css": "text/css", ".js": "application/javascript"}
-                self.send_response(200); self.send_header("Content-Type", types.get(asset.suffix, "application/octet-stream")); self.end_headers(); self.wfile.write(asset.read_bytes())
-            else:
-                self.send_error(404)
-            return
-        self.send_error(404)
+        try:
+            path = self.path.split("?", 1)[0]
+            if path == "/":
+                self.send_html(render_page("login.html", {"MESSAGE": ""})); return
+            if path == "/register":
+                self.send_html(render_page("register.html", {"MESSAGE": ""})); return
+            if path == "/logout":
+                session = cookies.SimpleCookie(self.headers.get("Cookie")).get("ecoreward_session")
+                if session:
+                    SESSIONS.pop(session.value, None)
+                    with connection() as database:
+                        database.execute("DELETE FROM sessions WHERE token = ?", (session.value,))
+                self.redirect("/", "ecoreward_session=; Max-Age=0; Path=/"); return
+            if path == "/dashboard":
+                self.dashboard(); return
+            if path == "/deposit":
+                self.deposit_page(); return
+            if path == "/activity":
+                self.activity_page(); return
+            if path == "/rewards":
+                self.rewards_page(); return
+            if path.startswith("/static/"):
+                asset = ROOT / path.lstrip("/")
+                if asset.is_file() and ROOT in asset.resolve().parents:
+                    types = {".css": "text/css", ".js": "application/javascript"}
+                    self.send_response(200); self.send_header("Content-Type", types.get(asset.suffix, "application/octet-stream")); self.end_headers(); self.wfile.write(asset.read_bytes())
+                else:
+                    self.send_error(404)
+                return
+            self.send_error(404)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.send_html(f"<h1>500 Internal Error</h1><pre>{html.escape(str(e))}\n{html.escape(traceback.format_exc())}</pre>", status=500)
 
     def do_POST(self):
-        if self.path == "/register":
-            self.register(); return
-        if self.path == "/login":
-            self.login(); return
-        if self.path == "/deposit":
-            self.save_deposit(); return
-        if self.path == "/redeem":
-            self.redeem_reward(); return
-        if self.path == "/api/deposit":
-            self.api_deposit(); return
-        self.send_error(404)
+        try:
+            if self.path == "/register":
+                self.register(); return
+            if self.path == "/login":
+                self.login(); return
+            if self.path == "/deposit":
+                self.save_deposit(); return
+            if self.path == "/redeem":
+                self.redeem_reward(); return
+            if self.path == "/api/deposit":
+                self.api_deposit(); return
+            self.send_error(404)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.send_html(f"<h1>500 Internal Error</h1><pre>{html.escape(str(e))}\n{html.escape(traceback.format_exc())}</pre>", status=500)
 
     def api_deposit(self):
         user = self.current_user()
         if not user:
-            with connection() as database:
-                user = database.execute("SELECT * FROM users ORDER BY id ASC LIMIT 1").fetchone()
-        if not user:
-            self.send_json({"success": False, "message": "No registered user found in database."}, status=401)
+            self.send_json({"success": False, "message": "No user found in database."}, status=401)
             return
 
         payload = self.json_data()
@@ -207,6 +235,8 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
         except sqlite3.IntegrityError:
             self.send_html(render_page("register.html", {"MESSAGE": "That email already has an account. Please log in."})); return
         token = secrets.token_urlsafe(24); SESSIONS[token] = user_id
+        with connection() as database:
+            database.execute("INSERT OR REPLACE INTO sessions (token, user_id) VALUES (?, ?)", (token, user_id))
         self.redirect("/dashboard", f"ecoreward_session={token}; HttpOnly; Path=/; SameSite=Lax")
 
     def login(self):
@@ -216,6 +246,8 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
         if not user or not password_matches(password, user["password_hash"]):
             self.send_html(render_page("login.html", {"MESSAGE": "Email or password is not correct."})); return
         token = secrets.token_urlsafe(24); SESSIONS[token] = user["id"]
+        with connection() as database:
+            database.execute("INSERT OR REPLACE INTO sessions (token, user_id) VALUES (?, ?)", (token, user["id"]))
         self.redirect("/dashboard", f"ecoreward_session={token}; HttpOnly; Path=/; SameSite=Lax")
 
     def dashboard(self):
@@ -240,15 +272,36 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             return
         with connection() as database:
             deposits = database.execute("SELECT * FROM deposits WHERE user_id = ? ORDER BY id DESC", (user["id"],)).fetchall()
+            redemptions = database.execute("SELECT * FROM redemptions WHERE user_id = ? ORDER BY id DESC", (user["id"],)).fetchall()
+        
         rows = "".join(f'<tr><td>{html.escape(item["category"])}</td><td>{item["weight_g"]} g</td><td>+{item["points"]} pts</td><td>{item["created_at"][:10]}</td></tr>' for item in deposits) or '<tr><td colspan="4">No deposits saved yet.</td></tr>'
-        self.send_html(render_page("activity.html", {"INITIAL": html.escape(user["name"][0].upper()), "ROWS": rows}))
+        redemption_rows = "".join(f'<tr><td>🎁 {html.escape(item["reward_name"])}</td><td>-{item["points_spent"]} pts</td><td>{item["created_at"][:10]}</td></tr>' for item in redemptions) or '<tr><td colspan="3">No rewards claimed yet.</td></tr>'
+
+        self.send_html(render_page("activity.html", {
+            "INITIAL": html.escape(user["name"][0].upper()),
+            "ROWS": rows,
+            "REDEMPTIONS_ROWS": redemption_rows
+        }))
 
     def rewards_page(self, message=""):
         user = self.require_user()
         if not user:
             return
+        with connection() as database:
+            # Refresh user point balance from database
+            user = database.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+            redemptions = database.execute("SELECT * FROM redemptions WHERE user_id = ? ORDER BY id DESC", (user["id"],)).fetchall()
+
         cards = "".join(f'<article class="reward-card"><div class="reward-icon">{icon}</div><h2>{name}</h2><p>{cost} points</p><form action="/redeem" method="post"><input type="hidden" name="reward" value="{name}"><button class="button full" type="submit" {"" if user["points"] >= cost else "disabled"}>Redeem</button></form></article>' for (name, cost), icon in zip(REWARDS.items(), ["☕", "👜", "💧"]))
-        self.send_html(render_page("rewards.html", {"INITIAL": html.escape(user["name"][0].upper()), "POINTS": user["points"], "MESSAGE": message, "CARDS": cards}))
+        claimed = "".join(f'<tr><td>🎁 {html.escape(item["reward_name"])}</td><td>-{item["points_spent"]} pts</td><td>{item["created_at"][:10]}</td></tr>' for item in redemptions) or '<tr><td colspan="3">No rewards claimed yet.</td></tr>'
+
+        self.send_html(render_page("rewards.html", {
+            "INITIAL": html.escape(user["name"][0].upper()),
+            "POINTS": user["points"],
+            "MESSAGE": message,
+            "CARDS": cards,
+            "MY_CLAIMED_REWARDS": claimed
+        }))
 
     def redeem_reward(self):
         user = self.require_user()
@@ -284,3 +337,4 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     initialise_database()
     ThreadingHTTPServer(("127.0.0.1", 5000), EcoRewardHandler).serve_forever()
+
