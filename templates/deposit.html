@@ -1,12 +1,93 @@
 {% extends "base.html" %}
 {% block title %}Deposit Waste | EcoReward{% endblock %}
 {% block content %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <div class="app-shell">
-  <aside class="sidebar"><a class="logo" href="/dashboard">eco<span>reward</span></a><nav><a href="/dashboard">▦ <span>Dashboard</span></a><a class="active" href="/deposit">♻ <span>Deposit waste</span></a><a href="/activity">◷ <span>My activity</span></a><a href="/rewards">◎ <span>Rewards</span></a></nav><a class="logout" href="/logout">← <span>Log out</span></a></aside>
+  <aside class="sidebar">
+    <a class="logo" href="/dashboard">eco<span>reward</span></a>
+    <nav>
+      <a href="/dashboard">▦ <span>Dashboard</span></a>
+      <a class="active" href="/deposit">♻ <span>Deposit waste</span></a>
+      <a href="/activity">◷ <span>My activity</span></a>
+      <a href="/rewards">◎ <span>Rewards</span></a>
+    </nav>
+    <a class="logout" href="/logout">← <span>Log out</span></a>
+  </aside>
   <main class="content deposit-page">
-    <header><div><p class="eyebrow green">SMART BIN</p><h1>Deposit waste</h1><p class="muted">Enter the weight manually for now. The ESP32 sensor will replace this later.</p></div><a class="profile" href="#">[[INITIAL]]</a></header>
-    <section class="steps"><div class="step active"><span>1</span><p>Identify</p></div><i></i><div class="step"><span>2</span><p>Scan waste</p></div><i></i><div class="step"><span>3</span><p>Weigh & reward</p></div></section>
-    <section class="deposit-card"><div class="qr-placeholder"><span>♻</span></div><p class="eyebrow green">PHASE 2 — MANUAL DEPOSIT</p><h2>Save a waste deposit</h2><p class="muted">[[MESSAGE]]</p><form action="/deposit" method="post"><label>Waste type<select name="category" required><option value="">Choose a type</option><option>Plastic</option><option>Paper</option><option>Metal</option><option>Other</option></select></label><label>Weight in grams<input name="weight" type="number" min="1" max="10000" placeholder="Example: 250" required></label><button class="button full" type="submit">Save deposit <span>→</span></button></form><p class="muted small-note">Points: Plastic 5, Paper 3, Metal 8, Other 1 per 100 g.</p></section>
+    <header>
+      <div>
+        <p class="eyebrow green">SMART BIN — PHASE 3</p>
+        <h1>Deposit Waste</h1>
+        <p class="muted">Scan your Bin/User QR code via webcam or record a waste deposit manually.</p>
+      </div>
+      <a class="profile" href="#">[[INITIAL]]</a>
+    </header>
+
+    <section class="steps">
+      <div class="step active" id="step-1"><span>1</span><p>Identify</p></div>
+      <i></i>
+      <div class="step" id="step-2"><span>2</span><p>Scan / Select</p></div>
+      <i></i>
+      <div class="step" id="step-3"><span>3</span><p>Weigh & Reward</p></div>
+    </section>
+
+    <!-- Mode Selector Tabs -->
+    <div class="mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
+      <button class="button tab-btn active" id="tab-qr" onclick="switchMode('qr')">📷 Webcam QR Scan</button>
+      <button class="button tab-btn secondary" id="tab-manual" onclick="switchMode('manual')">📝 Manual Entry</button>
+      <button class="button tab-btn secondary" id="tab-sensor" onclick="switchMode('sensor')">📡 Hardware Simulator</button>
+    </div>
+
+    <!-- QR Scanner Viewport Section -->
+    <section class="deposit-card" id="qr-section">
+      <p class="eyebrow green">LIVE CAMERA SCANNER</p>
+      <h2>Scan User or Bin QR Code</h2>
+      <p class="muted">Hold up your QR code or product barcode to your webcam.</p>
+      <div id="qr-reader" style="width: 100%; max-width: 480px; margin: 15px auto; border-radius: 12px; overflow: hidden; background: #000;"></div>
+      <div id="qr-result" class="scan-badge" style="display: none; padding: 12px; background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; border-radius: 8px; margin-top: 15px; color: #22c55e; font-weight: 600;"></div>
+    </section>
+
+    <!-- Manual Form Section -->
+    <section class="deposit-card" id="form-section">
+      <p class="eyebrow green">WASTE DEPOSIT FORM</p>
+      <h2>Save a Waste Deposit</h2>
+      <p class="muted">[[MESSAGE]]</p>
+      <form action="/deposit" method="post" id="depositForm">
+        <label>Waste type
+          <select name="category" id="categorySelect" required onchange="calculatePointsPreview()">
+            <option value="">Choose a type</option>
+            <option value="Plastic">Plastic (5 pts / 100g)</option>
+            <option value="Paper">Paper (3 pts / 100g)</option>
+            <option value="Metal">Metal (8 pts / 100g)</option>
+            <option value="Other">Other (1 pt / 100g)</option>
+          </select>
+        </label>
+        <label>Weight in grams
+          <input name="weight" id="weightInput" type="number" min="1" max="10000" placeholder="Example: 250" required oninput="calculatePointsPreview()">
+        </label>
+
+        <!-- Live Points Calculation Preview -->
+        <div id="points-preview" style="margin: 15px 0; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; display: none;">
+          <span>Estimated Earnings: </span><strong id="preview-pts" style="color: #22c55e; font-size: 1.2rem;">0 pts</strong>
+        </div>
+
+        <button class="button full" type="submit">Save deposit <span>→</span></button>
+      </form>
+      <p class="muted small-note" style="margin-top: 15px;">Points Rate: Plastic 5, Paper 3, Metal 8, Other 1 per 100 g.</p>
+    </section>
+
+    <!-- Hardware Sensor Simulator Section -->
+    <section class="deposit-card" id="sensor-section" style="display: none;">
+      <p class="eyebrow green">HARDWARE / ESP32 SIMULATOR</p>
+      <h2>Simulate IoT Weight Sensor Signal</h2>
+      <p class="muted">Simulate an incoming HTTP REST POST request from an ESP32 load cell scale sensor.</p>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+        <button class="button secondary" onclick="simulateSensor(150, 'Plastic')">⚖️ Simulate Load Cell: 150g Plastic</button>
+        <button class="button secondary" onclick="simulateSensor(500, 'Metal')">⚖️ Simulate Load Cell: 500g Metal</button>
+        <button class="button secondary" onclick="simulateSensor(300, 'Paper')">⚖️ Simulate Load Cell: 300g Paper</button>
+      </div>
+      <div id="sensor-status" style="margin-top: 15px; font-weight: 500;"></div>
+    </section>
   </main>
 </div>
 {% endblock %}

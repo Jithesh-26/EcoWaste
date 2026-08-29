@@ -6,6 +6,7 @@ from urllib.parse import parse_qs
 import hashlib
 import html
 import re
+import json
 import secrets
 import sqlite3
 
@@ -79,6 +80,14 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body.encode("utf-8"))
 
+    def send_json(self, data, status=200):
+        body = json.dumps(data).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
     def redirect(self, location, cookie=None):
         self.send_response(303)
         self.send_header("Location", location)
@@ -89,6 +98,15 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
     def form_data(self):
         length = int(self.headers.get("Content-Length", 0))
         return {key: value[0].strip() for key, value in parse_qs(self.rfile.read(length).decode()).items()}
+
+    def json_data(self):
+        length = int(self.headers.get("Content-Length", 0))
+        if length <= 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(length).decode("utf-8"))
+        except Exception:
+            return {}
 
     def current_user(self):
         session = cookies.SimpleCookie(self.headers.get("Cookie")).get("ecoreward_session")
@@ -142,7 +160,42 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             self.save_deposit(); return
         if self.path == "/redeem":
             self.redeem_reward(); return
+        if self.path == "/api/deposit":
+            self.api_deposit(); return
         self.send_error(404)
+
+    def api_deposit(self):
+        user = self.current_user()
+        if not user:
+            with connection() as database:
+                user = database.execute("SELECT * FROM users ORDER BY id ASC LIMIT 1").fetchone()
+        if not user:
+            self.send_json({"success": False, "message": "No registered user found in database."}, status=401)
+            return
+
+        payload = self.json_data()
+        category = payload.get("category", "")
+        try:
+            weight = int(payload.get("weight", 0))
+        except (ValueError, TypeError):
+            weight = 0
+
+        if category not in RATES or not 1 <= weight <= 10000:
+            self.send_json({"success": False, "message": "Choose a waste type and weight between 1 and 10,000g."}, status=400)
+            return
+
+        points = max(1, round(weight * RATES[category] / 100))
+        with connection() as database:
+            database.execute("INSERT INTO deposits (user_id, category, weight_g, points) VALUES (?, ?, ?, ?)", (user["id"], category, weight, points))
+            database.execute("UPDATE users SET points = points + ? WHERE id = ?", (points, user["id"]))
+
+        self.send_json({
+            "success": True,
+            "points": points,
+            "weight_g": weight,
+            "category": category,
+            "message": f"Deposited {weight}g of {category.lower()} successfully."
+        })
 
     def register(self):
         form = self.form_data(); name = form.get("name", ""); email = form.get("email", "").lower(); password = form.get("password", "")
