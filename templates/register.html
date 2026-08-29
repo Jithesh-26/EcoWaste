@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Create account | EcoReward{% endblock %}
+{% block content %}
+<main class="auth-layout">
+  <section class="brand-panel">
+    <a class="logo" href="/">eco<span>reward</span></a>
+    <div class="brand-copy"><p class="eyebrow">JOIN THE CHANGE</p><h1>Give waste a second life.</h1><p>Create an account and start turning responsible recycling into rewards.</p></div>
+    <div class="leaf-art">♻</div>
+  </section>
+  <section class="auth-card-wrap">
+    <div class="auth-card">
+      <p class="eyebrow green">GET STARTED</p><h2>Create your account</h2><p class="muted">It only takes a minute.</p>
+      <div class="form-message">[[MESSAGE]]</div>
+      <form action="/register" method="post">
+        <label>Full name<input name="name" type="text" placeholder="Your name" required></label>
+        <label>Email address<input name="email" type="email" placeholder="you@example.com" required></label>
+        <label>Password<input name="password" type="password" placeholder="Create a password" required minlength="4"></label>
+        <button class="button full" type="submit">Create account <span>→</span></button>
+      </form>
+      <p class="auth-switch">Already have an account? <a href="/">Log in</a></p>
+    </div>
+  </section>
+</main>
+{% endblock %}

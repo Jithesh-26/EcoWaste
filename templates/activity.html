@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}My Activity | EcoReward{% endblock %}
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar"><a class="logo" href="/dashboard">eco<span>reward</span></a><nav><a href="/dashboard">▦ <span>Dashboard</span></a><a href="/deposit">♻ <span>Deposit waste</span></a><a class="active" href="/activity">◷ <span>My activity</span></a><a href="/rewards">◎ <span>Rewards</span></a></nav><a class="logout" href="/logout">← <span>Log out</span></a></aside>
+  <main class="content"><header><div><p class="eyebrow green">YOUR RECORD</p><h1>My activity</h1><p class="muted">All waste deposits saved in your account.</p></div><a class="profile" href="#">[[INITIAL]]</a></header><section class="panel"><div class="panel-heading"><div><h2>Deposit history</h2><p class="muted">Each deposit earns points based on its type and weight.</p></div><a class="button" href="/deposit">New deposit</a></div><div class="table-wrap"><table><thead><tr><th>Waste type</th><th>Weight</th><th>Points</th><th>Date</th></tr></thead><tbody>[[ROWS]]</tbody></table></div></section></main>
+</div>
+{% endblock %}

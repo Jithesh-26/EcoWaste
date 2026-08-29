@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | EcoReward{% endblock %}
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="logo" href="/dashboard">eco<span>reward</span></a>
+    <nav><a class="active" href="/dashboard">▦ <span>Dashboard</span></a><a href="/deposit">♻ <span>Deposit waste</span></a><a href="/activity">◷ <span>My activity</span></a><a href="/rewards">◎ <span>Rewards</span></a></nav>
+    <a class="logout" href="/logout">← <span>Log out</span></a>
+  </aside>
+  <main class="content">
+    <header><div><p class="eyebrow green">GOOD MORNING</p><h1>Hello, [[NAME]]! <span class="wave">👋</span></h1><p class="muted">Here is your recycling impact so far.</p></div><a class="profile" href="#">[[INITIAL]]</a></header>
+    <section class="stat-grid">
+      <article class="stat-card"><span class="stat-icon green-bg">★</span><div><p>Available points</p><strong>[[POINTS]]</strong><small>Saved in your account</small></div></article>
+      <article class="stat-card"><span class="stat-icon blue-bg">♻</span><div><p>Waste recycled</p><strong>[[WEIGHT]] <em>kg</em></strong><small>Across [[COUNT]] deposits</small></div></article>
+      <article class="stat-card"><span class="stat-icon orange-bg">♧</span><div><p>CO₂ saved</p><strong>[[WEIGHT]] <em>kg</em></strong><small>Prototype estimate</small></div></article>
+    </section>
+    <section class="dashboard-grid">
+      <article class="panel impact"><div><p class="eyebrow green">MAKE AN IMPACT</p><h2>Ready to recycle?</h2><p>Deposit your waste at the smart bin and earn points instantly.</p><a class="button" href="/deposit">Deposit waste <span>→</span></a></div><div class="impact-icon">♻</div></article>
+      <article class="panel activity"><div class="panel-heading"><div><h2>Recent activity</h2><p class="muted">Your latest deposits</p></div></div>[[ACTIVITY]]</article>
+    </section>
+  </main>
+</div>
+{% endblock %}

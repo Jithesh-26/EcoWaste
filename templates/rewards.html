@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Rewards | EcoReward{% endblock %}
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar"><a class="logo" href="/dashboard">eco<span>reward</span></a><nav><a href="/dashboard">▦ <span>Dashboard</span></a><a href="/deposit">♻ <span>Deposit waste</span></a><a href="/activity">◷ <span>My activity</span></a><a class="active" href="/rewards">◎ <span>Rewards</span></a></nav><a class="logout" href="/logout">← <span>Log out</span></a></aside>
+  <main class="content"><header><div><p class="eyebrow green">SPEND YOUR POINTS</p><h1>Rewards</h1><p class="muted">Choose a reward when you have enough points.</p></div><a class="profile" href="#">[[INITIAL]]</a></header><section class="points-banner"><span>★</span><div><p>Your available balance</p><strong>[[POINTS]] points</strong></div></section><p class="form-message">[[MESSAGE]]</p><section class="reward-grid">[[CARDS]]</section></main>
+</div>
+{% endblock %}

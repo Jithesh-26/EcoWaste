@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Welcome | EcoReward{% endblock %}
+{% block content %}
+<main class="auth-layout">
+  <section class="brand-panel">
+    <a class="logo" href="/">eco<span>reward</span></a>
+    <div class="brand-copy">
+      <p class="eyebrow">SMART WASTE, REAL IMPACT</p>
+      <h1>Your small action makes a cleaner tomorrow.</h1>
+      <p>Recycle responsibly, earn points, and see the impact you make.</p>
+    </div>
+    <div class="leaf-art">♻</div>
+  </section>
+  <section class="auth-card-wrap">
+    <div class="auth-card">
+      <p class="eyebrow green">WELCOME BACK</p>
+      <h2>Log in to EcoReward</h2>
+      <p class="muted">Enter your details to view your rewards.</p>
+      <div class="form-message">[[MESSAGE]]</div>
+      <form action="/login" method="post">
+        <label>Email address<input name="email" type="email" placeholder="you@example.com" required></label>
+        <label>Password<input name="password" type="password" placeholder="Enter your password" required></label>
+        <div class="form-row"><label class="check"><input type="checkbox"> Remember me</label><a href="#">Forgot password?</a></div>
+        <button class="button full" type="submit">Log in <span>→</span></button>
+      </form>
+      <p class="auth-switch">New to EcoReward? <a href="/register">Create an account</a></p>
+    </div>
+  </section>
+</main>
+{% endblock %}

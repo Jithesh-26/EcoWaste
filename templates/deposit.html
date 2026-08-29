@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Deposit Waste | EcoReward{% endblock %}
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar"><a class="logo" href="/dashboard">eco<span>reward</span></a><nav><a href="/dashboard">▦ <span>Dashboard</span></a><a class="active" href="/deposit">♻ <span>Deposit waste</span></a><a href="/activity">◷ <span>My activity</span></a><a href="/rewards">◎ <span>Rewards</span></a></nav><a class="logout" href="/logout">← <span>Log out</span></a></aside>
+  <main class="content deposit-page">
+    <header><div><p class="eyebrow green">SMART BIN</p><h1>Deposit waste</h1><p class="muted">Enter the weight manually for now. The ESP32 sensor will replace this later.</p></div><a class="profile" href="#">[[INITIAL]]</a></header>
+    <section class="steps"><div class="step active"><span>1</span><p>Identify</p></div><i></i><div class="step"><span>2</span><p>Scan waste</p></div><i></i><div class="step"><span>3</span><p>Weigh & reward</p></div></section>
+    <section class="deposit-card"><div class="qr-placeholder"><span>♻</span></div><p class="eyebrow green">PHASE 2 — MANUAL DEPOSIT</p><h2>Save a waste deposit</h2><p class="muted">[[MESSAGE]]</p><form action="/deposit" method="post"><label>Waste type<select name="category" required><option value="">Choose a type</option><option>Plastic</option><option>Paper</option><option>Metal</option><option>Other</option></select></label><label>Weight in grams<input name="weight" type="number" min="1" max="10000" placeholder="Example: 250" required></label><button class="button full" type="submit">Save deposit <span>→</span></button></form><p class="muted small-note">Points: Plastic 5, Paper 3, Metal 8, Other 1 per 100 g.</p></section>
+  </main>
+</div>
+{% endblock %}
