@@ -2,6 +2,9 @@
 {% block title %}Deposit Waste | EcoReward{% endblock %}
 {% block content %}
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+
 <div class="app-shell">
   <aside class="sidebar">
     <a class="logo" href="/dashboard">eco<span>reward</span></a>
@@ -16,9 +19,9 @@
   <main class="content deposit-page">
     <header>
       <div>
-        <p class="eyebrow green">SMART BIN — PHASE 3</p>
+        <p class="eyebrow green">SMART BIN — PHASE 3B</p>
         <h1>Deposit Waste</h1>
-        <p class="muted">Scan your Bin/User QR code via webcam or record a waste deposit manually.</p>
+        <p class="muted">Use AI Vision classification, QR code scanning, or record a deposit manually.</p>
       </div>
       <a class="profile" href="#">[[INITIAL]]</a>
     </header>
@@ -26,20 +29,43 @@
     <section class="steps">
       <div class="step active" id="step-1"><span>1</span><p>Identify</p></div>
       <i></i>
-      <div class="step" id="step-2"><span>2</span><p>Scan / Select</p></div>
+      <div class="step" id="step-2"><span>2</span><p>AI Classify / Scan</p></div>
       <i></i>
       <div class="step" id="step-3"><span>3</span><p>Weigh & Reward</p></div>
     </section>
 
     <!-- Mode Selector Tabs -->
-    <div class="mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
-      <button class="button tab-btn active" id="tab-qr" onclick="switchMode('qr')">📷 Webcam QR Scan</button>
+    <div class="mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+      <button class="button tab-btn active" id="tab-ai" onclick="switchMode('ai')">🤖 AI Vision Classifier</button>
+      <button class="button tab-btn secondary" id="tab-qr" onclick="switchMode('qr')">📷 Webcam QR Scan</button>
       <button class="button tab-btn secondary" id="tab-manual" onclick="switchMode('manual')">📝 Manual Entry</button>
       <button class="button tab-btn secondary" id="tab-sensor" onclick="switchMode('sensor')">📡 Hardware Simulator</button>
     </div>
 
+    <!-- AI Vision Classifier Section -->
+    <section class="deposit-card" id="ai-section">
+      <p class="eyebrow green">COMPUTER VISION AI MODEL</p>
+      <h2>Automatic Waste Classification</h2>
+      <p class="muted">Hold your waste item (bottle, can, box, paper) up to your camera to let AI detect the material type.</p>
+      
+      <div style="position: relative; width: 100%; max-width: 480px; margin: 15px auto;">
+        <video id="ai-video" autoplay playsinline muted style="width: 100%; height: 280px; object-fit: cover; border-radius: 12px; background: #000; display: block;"></video>
+        <div id="ai-model-status" style="margin-top: 10px; font-size: 0.85rem; color: #6e7d75;">⏳ Loading TensorFlow MobileNet AI Model...</div>
+      </div>
+
+      <div style="margin-top: 15px;">
+        <button class="button" id="btn-classify" onclick="classifyCurrentFrame()" disabled>🎯 Scan & Classify Waste Item</button>
+      </div>
+
+      <div id="ai-result-badge" style="display: none; margin-top: 15px; padding: 14px; border-radius: 10px; background: #edf8f0; border: 1px solid #bce4c7; text-align: left;">
+        <div style="font-size: 0.82rem; color: #16794c; font-weight: 700; text-transform: uppercase;">AI Detection Result</div>
+        <div id="ai-detected-name" style="font-size: 1.1rem; font-weight: 700; color: #1c2923; margin: 4px 0;">Item: Water bottle</div>
+        <div id="ai-category-matched" style="font-size: 0.92rem; color: #16794c; font-weight: 600;">Matched Category: Plastic (5 pts / 100g)</div>
+      </div>
+    </section>
+
     <!-- QR Scanner Viewport Section -->
-    <section class="deposit-card" id="qr-section">
+    <section class="deposit-card" id="qr-section" style="display: none;">
       <p class="eyebrow green">LIVE CAMERA SCANNER</p>
       <h2>Scan User or Bin QR Code</h2>
       <p class="muted">Hold up your QR code or product barcode to your webcam.</p>

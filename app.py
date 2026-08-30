@@ -189,11 +189,33 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
                 self.redeem_reward(); return
             if self.path == "/api/deposit":
                 self.api_deposit(); return
+            if self.path == "/api/classify":
+                self.api_classify(); return
             self.send_error(404)
         except Exception as e:
             import traceback
             traceback.print_exc()
             self.send_html(f"<h1>500 Internal Error</h1><pre>{html.escape(str(e))}\n{html.escape(traceback.format_exc())}</pre>", status=500)
+
+    def api_classify(self):
+        payload = self.json_data()
+        raw_label = payload.get("label", "").lower()
+        category = "Other"
+        if any(w in raw_label for w in ["bottle", "plastic", "container", "bucket", "cup"]):
+            category = "Plastic"
+        elif any(w in raw_label for w in ["can", "tin", "beer", "metal", "aluminum"]):
+            category = "Metal"
+        elif any(w in raw_label for w in ["paper", "carton", "cardboard", "box", "envelope"]):
+            category = "Paper"
+
+        rate = RATES.get(category, 1)
+        self.send_json({
+            "success": True,
+            "detected_label": raw_label,
+            "category": category,
+            "rate_per_100g": rate,
+            "message": f"Classified item as {category} ({rate} pts / 100g)."
+        })
 
     def api_deposit(self):
         user = self.current_user()
