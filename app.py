@@ -358,5 +358,5 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     initialise_database()
-    ThreadingHTTPServer(("127.0.0.1", 5000), EcoRewardHandler).serve_forever()
+    ThreadingHTTPServer(("0.0.0.0", 5000), EcoRewardHandler).serve_forever()
 

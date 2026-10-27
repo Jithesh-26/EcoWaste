@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Deposit Waste | EcoReward{% endblock %}
 {% block content %}
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
 
@@ -21,7 +20,7 @@
       <div>
         <p class="eyebrow green">SMART BIN — PHASE 3B</p>
         <h1>Deposit Waste</h1>
-        <p class="muted">Use AI Vision classification, QR code scanning, or record a deposit manually.</p>
+        <p class="muted">Use AI Vision classification or record a deposit manually.</p>
       </div>
       <a class="profile" href="#">[[INITIAL]]</a>
     </header>
@@ -29,7 +28,7 @@
     <section class="steps">
       <div class="step active" id="step-1"><span>1</span><p>Identify</p></div>
       <i></i>
-      <div class="step" id="step-2"><span>2</span><p>AI Classify / Scan</p></div>
+      <div class="step" id="step-2"><span>2</span><p>AI Classify</p></div>
       <i></i>
       <div class="step" id="step-3"><span>3</span><p>Weigh & Reward</p></div>
     </section>
@@ -37,7 +36,6 @@
     <!-- Mode Selector Tabs -->
     <div class="mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
       <button class="button tab-btn active" id="tab-ai" onclick="switchMode('ai')">🤖 AI Vision Classifier</button>
-      <button class="button tab-btn secondary" id="tab-qr" onclick="switchMode('qr')">📷 Webcam QR Scan</button>
       <button class="button tab-btn secondary" id="tab-manual" onclick="switchMode('manual')">📝 Manual Entry</button>
       <button class="button tab-btn secondary" id="tab-sensor" onclick="switchMode('sensor')">📡 Hardware Simulator</button>
     </div>
@@ -58,19 +56,10 @@
       </div>
 
       <div id="ai-result-badge" style="display: none; margin-top: 15px; padding: 14px; border-radius: 10px; background: #edf8f0; border: 1px solid #bce4c7; text-align: left;">
-        <div style="font-size: 0.82rem; color: #16794c; font-weight: 700; text-transform: uppercase;">AI Detection Result</div>
-        <div id="ai-detected-name" style="font-size: 1.1rem; font-weight: 700; color: #1c2923; margin: 4px 0;">Item: Water bottle</div>
-        <div id="ai-category-matched" style="font-size: 0.92rem; color: #16794c; font-weight: 600;">Matched Category: Plastic (5 pts / 100g)</div>
+        <div style="font-size: 0.82rem; color: #16794c; font-weight: 700; text-transform: uppercase;">AI Classification Result</div>
+        <div id="ai-category-matched" style="font-size: 1.15rem; font-weight: 700; color: #16794c; margin: 4px 0;">Category: Plastic</div>
+        <div id="ai-points-rate" style="font-size: 0.92rem; color: #1c2923; font-weight: 600;">Reward Rate: 5 pts / 100g</div>
       </div>
-    </section>
-
-    <!-- QR Scanner Viewport Section -->
-    <section class="deposit-card" id="qr-section" style="display: none;">
-      <p class="eyebrow green">LIVE CAMERA SCANNER</p>
-      <h2>Scan User or Bin QR Code</h2>
-      <p class="muted">Hold up your QR code or product barcode to your webcam.</p>
-      <div id="qr-reader" style="width: 100%; max-width: 480px; margin: 15px auto; border-radius: 12px; overflow: hidden; background: #000;"></div>
-      <div id="qr-result" class="scan-badge" style="display: none; padding: 12px; background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; border-radius: 8px; margin-top: 15px; color: #22c55e; font-weight: 600;"></div>
     </section>
 
     <!-- Manual Form Section -->
