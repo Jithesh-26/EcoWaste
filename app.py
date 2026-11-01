@@ -9,12 +9,28 @@ import re
 import json
 import secrets
 import sqlite3
+import time
 
 ROOT = Path(__file__).parent
 DATABASE = ROOT / "ecoreward.db"
 SESSIONS = {}
 RATES = {"Plastic": 5, "Paper": 3, "Metal": 8, "Other": 1}
 REWARDS = {"Coffee coupon": 50, "Reusable tote bag": 100, "Eco water bottle": 200}
+
+HARDWARE_STATE = {
+    "esp32_connected": False,
+    "last_heartbeat": 0,
+    "ir_detected": False,
+    "current_weight_g": 0,
+    "pending_user_id": None,
+    "pending_category": None,
+    "pending_confidence": 0,
+    "pending_timestamp": 0,
+    "last_deposit": None,
+    "tare_requested": False,
+    "dispense_requested": False,
+    "step": "WAIT_FOR_CAMERA"  # "WAIT_FOR_CAMERA", "PENDING_INSERT", "READY_TO_COLLECT", "COMPLETED"
+}
 
 
 def connection():
@@ -163,6 +179,8 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
                 self.activity_page(); return
             if path == "/rewards":
                 self.rewards_page(); return
+            if path == "/api/hardware/status":
+                self.api_hardware_status_get(); return
             if path.startswith("/static/"):
                 asset = ROOT / path.lstrip("/")
                 if asset.is_file() and ROOT in asset.resolve().parents:
@@ -191,6 +209,18 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
                 self.api_deposit(); return
             if self.path == "/api/classify":
                 self.api_classify(); return
+            if self.path == "/api/hardware/pending":
+                self.api_hardware_pending(); return
+            if self.path in ("/api/hardware/deposit", "/api/hardware/weight"):
+                self.api_hardware_deposit(); return
+            if self.path == "/api/hardware/collect":
+                self.api_hardware_collect(); return
+            if self.path == "/api/hardware/status":
+                self.api_hardware_status_post(); return
+            if self.path == "/api/hardware/tare":
+                self.api_hardware_tare(); return
+            if self.path == "/api/hardware/reset":
+                self.api_hardware_reset(); return
             self.send_error(404)
         except Exception as e:
             import traceback
@@ -217,6 +247,197 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             "message": f"Classified item as {category} ({rate} pts / 100g)."
         })
 
+    def api_hardware_status_get(self):
+        is_connected = (time.time() - HARDWARE_STATE["last_heartbeat"]) < 10
+        self.send_json({
+            "success": True,
+            "esp32_connected": is_connected,
+            "ir_detected": HARDWARE_STATE["ir_detected"],
+            "current_weight_g": HARDWARE_STATE["current_weight_g"],
+            "step": HARDWARE_STATE["step"],
+            "pending_category": HARDWARE_STATE["pending_category"],
+            "pending_confidence": HARDWARE_STATE["pending_confidence"],
+            "last_deposit": HARDWARE_STATE["last_deposit"],
+            "tare_requested": HARDWARE_STATE["tare_requested"],
+            "dispense_requested": HARDWARE_STATE.get("dispense_requested", False)
+        })
+
+    def api_hardware_status_post(self):
+        payload = self.json_data()
+        HARDWARE_STATE["last_heartbeat"] = time.time()
+        HARDWARE_STATE["esp32_connected"] = True
+        HARDWARE_STATE["ir_detected"] = bool(payload.get("ir_detected", False))
+        HARDWARE_STATE["current_weight_g"] = int(payload.get("current_weight_g", 0))
+
+        # If transaction finished and IR has physically cleared and weight is back to 0, reset to ready state
+        if HARDWARE_STATE["step"] == "COMPLETED" and not HARDWARE_STATE["ir_detected"]:
+            if HARDWARE_STATE["current_weight_g"] < 5:
+                HARDWARE_STATE["step"] = "WAIT_FOR_CAMERA"
+
+        tare_flag = HARDWARE_STATE["tare_requested"]
+        if tare_flag and payload.get("tare_completed"):
+            HARDWARE_STATE["tare_requested"] = False
+
+        dispense_flag = HARDWARE_STATE.get("dispense_requested", False)
+        if dispense_flag:
+            # Clear flag once served to ESP32
+            HARDWARE_STATE["dispense_requested"] = False
+
+        self.send_json({
+            "success": True,
+            "step": HARDWARE_STATE["step"],
+            "pending_category": HARDWARE_STATE["pending_category"],
+            "tare_requested": tare_flag,
+            "dispense_requested": dispense_flag
+        })
+
+    def api_hardware_pending(self):
+        user = self.current_user()
+        if not user:
+            self.send_json({"success": False, "message": "No active user session."}, status=401)
+            return
+
+        payload = self.json_data()
+        category = payload.get("category", "").strip().capitalize()
+        confidence = int(payload.get("confidence", 0))
+
+        if category not in RATES:
+            self.send_json({"success": False, "message": f"Invalid category: {category}"}, status=400)
+            return
+
+        if confidence < 70:
+            self.send_json({
+                "success": False,
+                "message": "Item could not be clearly identified. Please show item again."
+            }, status=422)
+            return
+
+        HARDWARE_STATE["pending_user_id"] = user["id"]
+        HARDWARE_STATE["pending_category"] = category
+        HARDWARE_STATE["pending_confidence"] = confidence
+        HARDWARE_STATE["pending_timestamp"] = time.time()
+        HARDWARE_STATE["step"] = "PENDING_INSERT"
+
+        self.send_json({
+            "success": True,
+            "category": category,
+            "confidence": confidence,
+            "step": "PENDING_INSERT",
+            "rate_per_100g": RATES[category],
+            "message": f"Category identified: {category}. Please place item inside the bin."
+        })
+
+    def api_hardware_deposit(self):
+        payload = self.json_data()
+        weight = int(payload.get("weight", 0))
+        ir_detected = bool(payload.get("ir_detected", True))
+        is_demo = bool(payload.get("demo", False))
+
+        # Duplicate deposit prevention: block if already completed or waiting to collect, unless it is a new demo trigger
+        if HARDWARE_STATE["step"] in ("COMPLETED", "READY_TO_COLLECT") and not is_demo:
+            self.send_json({
+                "success": False,
+                "dispense": False,
+                "message": "Deposit already in progress or completed. Clear bin to scan next item."
+            }, status=409)
+            return
+
+        category = HARDWARE_STATE.get("pending_category")
+        if not category:
+            category = payload.get("category")
+
+        if not category or category not in RATES:
+            self.send_json({
+                "success": False,
+                "dispense": False,
+                "message": "No waste category classified yet. Show waste to camera first."
+            }, status=400)
+            return
+
+        if not (5 <= weight <= 10000):
+            self.send_json({
+                "success": False,
+                "dispense": False,
+                "message": f"Invalid weight ({weight}g). Weight must be between 5g and 10,000g."
+            }, status=400)
+            return
+
+        user_id = HARDWARE_STATE.get("pending_user_id")
+        if not user_id:
+            user = self.current_user()
+            user_id = user["id"] if user else 1
+
+        points = max(1, int((weight * RATES[category] + 50) // 100))
+
+        with connection() as database:
+            database.execute(
+                "INSERT INTO deposits (user_id, category, weight_g, points) VALUES (?, ?, ?, ?)",
+                (user_id, category, weight, points)
+            )
+            database.execute("UPDATE users SET points = points + ? WHERE id = ?", (points, user_id))
+            user_row = database.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            new_balance = user_row["points"] if user_row else points
+            user_name = user_row["name"] if user_row else "Eco User"
+
+        HARDWARE_STATE["current_weight_g"] = weight
+        HARDWARE_STATE["ir_detected"] = ir_detected
+        HARDWARE_STATE["step"] = "READY_TO_COLLECT"
+        now_ts = time.time()
+        deposit_record = {
+            "category": category,
+            "weight": weight,
+            "points": points,
+            "new_balance": new_balance,
+            "user_name": user_name,
+            "timestamp": now_ts,
+            "time_str": time.strftime("%H:%M:%S", time.localtime(now_ts)),
+            "date_str": time.strftime("%Y-%m-%d", time.localtime(now_ts)),
+            "collected": False
+        }
+        HARDWARE_STATE["last_deposit"] = deposit_record
+        HARDWARE_STATE["pending_category"] = None
+        HARDWARE_STATE["pending_confidence"] = 0
+
+        self.send_json({
+            "success": True,
+            "dispense": False,
+            "ready_to_collect": True,
+            "deposit": deposit_record,
+            "category": category,
+            "weight": weight,
+            "points": points,
+            "new_balance": new_balance,
+            "message": f"Success! {weight}g of {category.lower()} recorded. Earned {points} points. Click Collect Reward to dispense slip."
+        })
+
+    def api_hardware_collect(self):
+        last_deposit = HARDWARE_STATE.get("last_deposit")
+        if not last_deposit:
+            self.send_json({"success": False, "message": "No deposit ready for collection."}, status=400)
+            return
+
+        last_deposit["collected"] = True
+        HARDWARE_STATE["dispense_requested"] = True
+        HARDWARE_STATE["step"] = "COMPLETED"
+
+        self.send_json({
+            "success": True,
+            "message": "Reward collected! Dispensing slip via servo.",
+            "deposit": last_deposit
+        })
+
+    def api_hardware_tare(self):
+        HARDWARE_STATE["tare_requested"] = True
+        self.send_json({"success": True, "message": "Tare request queued for ESP32 scale."})
+
+    def api_hardware_reset(self):
+        HARDWARE_STATE["step"] = "WAIT_FOR_CAMERA"
+        HARDWARE_STATE["pending_category"] = None
+        HARDWARE_STATE["pending_confidence"] = 0
+        HARDWARE_STATE["last_deposit"] = None
+        HARDWARE_STATE["dispense_requested"] = False
+        self.send_json({"success": True, "message": "Hardware state reset to camera standby."})
+
     def api_deposit(self):
         user = self.current_user()
         if not user:
@@ -234,7 +455,7 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             self.send_json({"success": False, "message": "Choose a waste type and weight between 1 and 10,000g."}, status=400)
             return
 
-        points = max(1, round(weight * RATES[category] / 100))
+        points = max(1, int((weight * RATES[category] + 50) // 100))
         with connection() as database:
             database.execute("INSERT INTO deposits (user_id, category, weight_g, points) VALUES (?, ?, ?, ?)", (user["id"], category, weight, points))
             database.execute("UPDATE users SET points = points + ? WHERE id = ?", (points, user["id"]))
@@ -349,7 +570,7 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             weight = 0
         if category not in RATES or not 1 <= weight <= 10000:
             self.deposit_page("Choose a waste type and enter a weight from 1 to 10,000 grams."); return
-        points = max(1, round(weight * RATES[category] / 100))
+        points = max(1, int((weight * RATES[category] + 50) // 100))
         with connection() as database:
             database.execute("INSERT INTO deposits (user_id, category, weight_g, points) VALUES (?, ?, ?, ?)", (user["id"], category, weight, points))
             database.execute("UPDATE users SET points = points + ? WHERE id = ?", (points, user["id"]))

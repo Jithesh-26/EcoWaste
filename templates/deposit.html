@@ -26,25 +26,57 @@
     </header>
 
     <section class="steps">
-      <div class="step active" id="step-1"><span>1</span><p>Identify</p></div>
+      <div class="step active" id="step-1"><span>1</span><p>Camera Scan</p></div>
       <i></i>
-      <div class="step" id="step-2"><span>2</span><p>AI Classify</p></div>
+      <div class="step" id="step-2"><span>2</span><p>Bin Intake</p></div>
       <i></i>
       <div class="step" id="step-3"><span>3</span><p>Weigh & Reward</p></div>
     </section>
 
+    <!-- Live Hardware Status Monitor Widget -->
+    <section class="hardware-status-bar" style="background: #ffffff; border: 1px solid #dce5df; border-radius: 12px; padding: 14px 18px; margin-bottom: 24px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 0.88rem;">
+            <span id="hw-esp32-dot" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #94a3b8;"></span>
+            <strong>ESP32:</strong>
+            <span id="hw-esp32-text" style="color: #64748b;">Standby (Demo Ready)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 0.88rem;">
+            <span id="hw-ir-dot" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #22c55e;"></span>
+            <strong>IR Sensor:</strong>
+            <span id="hw-ir-text" style="color: #16794c;">Beam Clear</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 0.88rem;">
+            <span>⚖️</span>
+            <strong>Scale:</strong>
+            <span id="hw-weight-text" style="font-weight: 700; color: #16794c;">0 g</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 0.88rem;">
+            <span>🏷️</span>
+            <strong>Locked Type:</strong>
+            <span id="hw-pending-type" style="color: #0f172a; font-weight: 600;">None (Show to Camera)</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="button secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="requestScaleTare()">⚖️ Tare Zero</button>
+          <button class="button secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="resetHardwareState()">🔄 Reset</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Mode Selector Tabs -->
     <div class="mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-      <button class="button tab-btn active" id="tab-ai" onclick="switchMode('ai')">🤖 AI Vision Classifier</button>
-      <button class="button tab-btn secondary" id="tab-manual" onclick="switchMode('manual')">📝 Manual Entry</button>
-      <button class="button tab-btn secondary" id="tab-sensor" onclick="switchMode('sensor')">📡 Hardware Simulator</button>
+      <button class="button tab-btn active" id="tab-ai" onclick="switchMode('ai')">🤖 Smart Bin (Camera + Hardware)</button>
+      <button class="button tab-btn secondary" id="tab-sensor" onclick="switchMode('sensor')">📡 Demo Simulator</button>
+      <button class="button tab-btn secondary" id="tab-manual" onclick="switchMode('manual')">📝 Manual Backup</button>
     </div>
 
     <!-- AI Vision Classifier Section -->
     <section class="deposit-card" id="ai-section">
-      <p class="eyebrow green">COMPUTER VISION AI MODEL</p>
+      <p class="eyebrow green">STEP 1: SHOW WASTE TO CAMERA</p>
       <h2>Automatic Waste Classification</h2>
-      <p class="muted">Hold your waste item (bottle, can, box, paper) up to your camera to let AI detect the material type.</p>
+      <p class="muted">Hold your waste item (bottle, can, box, paper) up to the webcam to scan and identify the category.</p>
       
       <div style="position: relative; width: 100%; max-width: 480px; margin: 15px auto;">
         <video id="ai-video" autoplay playsinline muted style="width: 100%; height: 280px; object-fit: cover; border-radius: 12px; background: #000; display: block;"></video>
@@ -55,10 +87,111 @@
         <button class="button" id="btn-classify" onclick="classifyCurrentFrame()" disabled>🎯 Scan & Classify Waste Item</button>
       </div>
 
-      <div id="ai-result-badge" style="display: none; margin-top: 15px; padding: 14px; border-radius: 10px; background: #edf8f0; border: 1px solid #bce4c7; text-align: left;">
-        <div style="font-size: 0.82rem; color: #16794c; font-weight: 700; text-transform: uppercase;">AI Classification Result</div>
-        <div id="ai-category-matched" style="font-size: 1.15rem; font-weight: 700; color: #16794c; margin: 4px 0;">Category: Plastic</div>
-        <div id="ai-points-rate" style="font-size: 0.92rem; color: #1c2923; font-weight: 600;">Reward Rate: 5 pts / 100g</div>
+      <!-- Result Badge -->
+      <div id="ai-result-badge" style="display: none; margin-top: 18px; padding: 16px; border-radius: 10px; text-align: left; transition: all 0.3s ease;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span id="ai-status-pill" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; padding: 3px 8px; border-radius: 20px;"></span>
+        </div>
+        <div id="ai-category-matched" style="font-size: 1.25rem; font-weight: 700; margin: 6px 0;">Category: Plastic</div>
+        <div id="ai-points-rate" style="font-size: 0.92rem; font-weight: 600;">Reward Rate: 5 pts / 100g</div>
+        <div id="ai-instruction-text" style="font-size: 0.9rem; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.1);"></div>
+      </div>
+
+      <!-- Digital Weigh Scale Section (Step 2) -->
+      <div id="scale-card" class="digital-scale-card" style="margin-top: 24px; border: 1px solid #dce5df; border-radius: 12px; background: #ffffff; padding: 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.04); text-align: left; transition: all 0.3s ease;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <p class="eyebrow green" style="margin: 0 0 2px;">STEP 2: BIN INTAKE & WEIGH SCALE</p>
+            <h3 style="font-size: 1.25rem; margin: 0; color: #1c2923;">Smart Bin Weigh Scale</h3>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span id="scale-status-badge" style="display: inline-block; font-size: 0.78rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: #e2f2e7; color: #16794c;">⚖️ Ready (Zeroed)</span>
+            <button class="button secondary" style="padding: 5px 10px; font-size: 0.78rem;" onclick="requestScaleTare()" title="Zero the load cell">Tare Zero</button>
+          </div>
+        </div>
+
+        <!-- Scale Guidance Banner -->
+        <div id="scale-guidance" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.88rem; color: #166534; display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.3rem;">ℹ️</span>
+          <span id="scale-guidance-text">Show item to camera above to lock the category, then place item into the bin intake.</span>
+        </div>
+
+        <!-- Digital LCD Screen -->
+        <div class="scale-lcd-screen" style="background: #0f172a; border-radius: 10px; padding: 22px; color: #ffffff; text-align: center; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5); border: 2px solid #1e293b;">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: #94a3b8; font-family: monospace; letter-spacing: 1px; margin-bottom: 6px;">
+            <span>HX711 LOAD CELL</span>
+            <span id="scale-mode-indicator">LIVE SCALE</span>
+          </div>
+
+          <div style="font-family: 'SF Mono', Consolas, 'Courier New', monospace; font-size: 3.2rem; font-weight: 800; color: #4ade80; text-shadow: 0 0 12px rgba(74,222,128,0.4); line-height: 1.1; margin: 8px 0;">
+            <span id="digital-scale-value">0</span> <span style="font-size: 1.5rem; color: #86efac; font-weight: 600;">g</span>
+          </div>
+
+          <!-- Weight Bar Gauge -->
+          <div style="background: #1e293b; height: 10px; border-radius: 5px; overflow: hidden; margin: 14px auto 8px; max-width: 90%;">
+            <div id="scale-progress-bar" style="background: linear-gradient(90deg, #22c55e, #10b981); width: 0%; height: 100%; transition: width 0.25s ease;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: #64748b; font-family: monospace; max-width: 90%; margin: 0 auto;">
+            <span>0 g</span>
+            <span>500 g</span>
+            <span>1000 g</span>
+          </div>
+        </div>
+
+        <!-- Live Reward & Action Bar -->
+        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div style="font-size: 0.78rem; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Estimated Reward</div>
+            <div id="scale-points-estimate" style="font-size: 1.35rem; font-weight: 800; color: #16794c;">0 pts</div>
+          </div>
+
+          <div style="display: flex; gap: 10px;">
+            <button class="button" id="btn-confirm-deposit" style="padding: 10px 18px; font-size: 0.9rem;" onclick="confirmCurrentScaleDeposit()" disabled>📥 Confirm Deposit</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Collect Reward Section (Dispense Slip on Demand) -->
+      <div id="collect-reward-card" style="display: none; margin-top: 24px; border: 2px solid #22c55e; border-radius: 14px; background: linear-gradient(145deg, #f0fdf4, #ffffff); padding: 24px; box-shadow: 0 8px 24px rgba(34,197,94,0.15); text-align: center; transition: all 0.3s ease;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: #dcfce7; color: #16794c; font-size: 1.8rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; box-shadow: 0 4px 12px rgba(22,121,76,0.15);">
+          🎁
+        </div>
+        <p class="eyebrow green" style="margin-bottom: 4px;">STEP 3: CLAIM REWARD</p>
+        <h2 style="font-size: 1.6rem; color: #14532d; margin: 0 0 6px;">Deposit Verified!</h2>
+        <p style="color: #475569; font-size: 0.95rem; margin: 0 0 16px;">
+          Recorded <strong id="collect-weight-text" style="color: #0f172a;">250g</strong> of <strong id="collect-category-text" style="color: #16794c;">Plastic</strong>. 
+          You earned <strong id="collect-points-text" style="color: #16794c; font-size: 1.2rem;">+13 PTS</strong>!
+        </p>
+        
+        <div style="max-width: 360px; margin: 0 auto;">
+          <button class="button full pulse-collect-btn" id="btn-collect-reward" onclick="collectReward()" style="font-size: 1.05rem; padding: 14px 20px; background: #16794c; color: #ffffff; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 6px 16px rgba(22,121,76,0.25);">
+            <span>🎟️</span>
+            <span>Collect Reward Slip</span>
+            <span>➔</span>
+          </button>
+        </div>
+        <div style="font-size: 0.8rem; color: #64748b; margin-top: 12px;">
+          Clicking will dispense your physical receipt slip and display your receipt.
+        </div>
+      </div>
+
+      <!-- Animated ATM Paper Slip Receipt Output -->
+      <div id="receipt-container" style="display: none; margin-top: 25px; perspective: 1000px;">
+        <div class="receipt-slip" style="max-width: 380px; margin: 0 auto; background: #fffcf4; border: 1px dashed #d1c7a7; border-radius: 8px; padding: 22px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); font-family: monospace; text-align: center; color: #292524;">
+          <div style="font-size: 1.1rem; font-weight: 800; letter-spacing: 2px; color: #16794c; margin-bottom: 4px;">══ ECOREWARD SLIP ══</div>
+          <div style="font-size: 0.75rem; color: #78716c; margin-bottom: 12px;">SMART BIN DISPENSER RECEIPT</div>
+          <div style="border-top: 1px dashed #e7e5e4; border-bottom: 1px dashed #e7e5e4; padding: 12px 0; margin: 10px 0; text-align: left; font-size: 0.85rem; line-height: 1.8;">
+            <div>ITEM TYPE: <strong id="rec-category" style="float: right;">PLASTIC</strong></div>
+            <div>NET WEIGHT: <strong id="rec-weight" style="float: right;">250 g</strong></div>
+            <div>POINTS EARNED: <strong id="rec-points" style="float: right; color: #16794c; font-size: 1rem;">+13 PTS</strong></div>
+            <div>DATE & TIME: <span id="rec-datetime" style="float: right; font-size: 0.78rem;"></span></div>
+            <div style="border-top: 1px dotted #e7e5e4; margin-top: 6px; padding-top: 6px;">NEW BALANCE: <strong id="rec-balance" style="float: right; color: #0284c7;">113 PTS</strong></div>
+          </div>
+          <div style="font-size: 0.75rem; color: #a8a29e; margin-top: 10px;">★ SERVO DISPENSED PHYSICAL RECEIPT ★<br>Thank you for keeping our planet clean!</div>
+        </div>
+        <div style="max-width: 380px; margin: 15px auto 0;">
+          <button class="button full" style="font-size: 0.95rem; padding: 12px;" onclick="resetForNextDeposit()">♻️ Deposit Another Item</button>
+        </div>
       </div>
     </section>
 
@@ -91,17 +224,40 @@
       <p class="muted small-note" style="margin-top: 15px;">Points Rate: Plastic 5, Paper 3, Metal 8, Other 1 per 100 g.</p>
     </section>
 
-    <!-- Hardware Sensor Simulator Section -->
+    <!-- Hardware Sensor Simulator & Demo Mode Section -->
     <section class="deposit-card" id="sensor-section" style="display: none;">
-      <p class="eyebrow green">HARDWARE / ESP32 SIMULATOR</p>
-      <h2>Simulate IoT Weight Sensor Signal</h2>
-      <p class="muted">Simulate an incoming HTTP REST POST request from an ESP32 load cell scale sensor.</p>
-      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
-        <button class="button secondary" onclick="simulateSensor(150, 'Plastic')">⚖️ Simulate Load Cell: 150g Plastic</button>
-        <button class="button secondary" onclick="simulateSensor(500, 'Metal')">⚖️ Simulate Load Cell: 500g Metal</button>
-        <button class="button secondary" onclick="simulateSensor(300, 'Paper')">⚖️ Simulate Load Cell: 300g Paper</button>
+      <p class="eyebrow green">DEMO MODE / HARDWARE SIMULATOR</p>
+      <h2>Test Full Flow Without Physical ESP32</h2>
+      <p class="muted">Simulate the physical ESP32 load cell scale and IR sensor signals directly to test points calculation, receipt generation, and duplicate prevention.</p>
+      
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 15px 0; text-align: left;">
+        <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b; margin-bottom: 8px;">1. Preset Waste Tests:</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px;">
+          <button class="button secondary" style="font-size: 0.85rem;" onclick="runDemoDeposit('Plastic', 250)">🧴 250g Plastic (+13 pts)</button>
+          <button class="button secondary" style="font-size: 0.85rem;" onclick="runDemoDeposit('Metal', 150)">🥫 150g Metal (+12 pts)</button>
+          <button class="button secondary" style="font-size: 0.85rem;" onclick="runDemoDeposit('Paper', 300)">📦 300g Paper (+9 pts)</button>
+          <button class="button secondary" style="font-size: 0.85rem;" onclick="runDemoDeposit('Other', 500)">📦 500g Other (+5 pts)</button>
+        </div>
+
+        <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b; margin: 18px 0 8px;">2. Custom Weight Simulation:</div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <input id="demo-weight-input" type="number" min="10" max="5000" value="350" placeholder="Grams" style="width: 120px; height: 42px;">
+          <select id="demo-cat-select" style="height: 42px;">
+            <option value="Plastic">Plastic (5 pts / 100g)</option>
+            <option value="Metal">Metal (8 pts / 100g)</option>
+            <option value="Paper">Paper (3 pts / 100g)</option>
+            <option value="Other">Other (1 pt / 100g)</option>
+          </select>
+          <button class="button" style="height: 42px; padding: 0 16px;" onclick="runCustomDemoDeposit()">🚀 Simulate Deposit</button>
+        </div>
+
+        <div style="margin-top: 14px; display: flex; gap: 10px;">
+          <button class="button secondary" style="font-size: 0.8rem; padding: 6px 12px;" onclick="toggleSimulatedIr()">📡 Toggle IR Sensor State</button>
+          <button class="button secondary" style="font-size: 0.8rem; padding: 6px 12px;" onclick="resetHardwareState()">🔄 Reset State Machine</button>
+        </div>
       </div>
-      <div id="sensor-status" style="margin-top: 15px; font-weight: 500;"></div>
+
+      <div id="sensor-status" style="margin-top: 15px; font-weight: 500; font-size: 0.92rem;"></div>
     </section>
   </main>
 </div>
