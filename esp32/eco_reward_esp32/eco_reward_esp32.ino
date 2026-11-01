@@ -70,8 +70,9 @@ float CALIBRATION_FACTOR = 420.0f;
 
 // State management
 unsigned long lastHeartbeatTime = 0;
-const unsigned long HEARTBEAT_INTERVAL_MS = 3000;
+const unsigned long HEARTBEAT_INTERVAL_MS = 400; // Continuous live scale streaming (400ms)
 bool isWaitingForClear = false;
+bool isWaitingForCollect = false;
 
 // ============================================================================
 // 4. SETUP
@@ -126,7 +127,7 @@ void loop() {
   long weightGrams = 0;
 
   if (scale.is_ready()) {
-    weightGrams = (long)scale.get_units(3);
+    weightGrams = (long)scale.get_units(1); // Fast single-read for responsive live streaming
     if (weightGrams < 0) weightGrams = 0; // clamp negative noise
   }
 
@@ -148,6 +149,12 @@ void loop() {
     sendHeartbeat(irDetected, weightGrams);
   }
 
+  // If waiting for the user to press "Collect Reward" on web, don't re-trigger deposit
+  if (isWaitingForCollect) {
+    delay(30);
+    return;
+  }
+
   // Trigger deposit process if IR detects waste insertion AND load cell has weight >= 10g
   if (irDetected && weightGrams >= 10) {
     Serial.println("\n[BIN TRIGGER] Waste insertion detected!");
@@ -166,16 +173,15 @@ void loop() {
     bool processed = sendDepositToServer(finalWeight, irDetected);
 
     if (processed) {
-      Serial.println("[ACTION] Dispensing reward slip via servo...");
-      dispenseRewardSlip();
-      isWaitingForClear = true; // Lock duplicate deposits until bin path clears
+      Serial.println("[DEPOSIT] Waste recorded! Waiting for user to click 'Collect Reward' on web dashboard...");
+      isWaitingForCollect = true;
     } else {
       Serial.println("[WARNING] Deposit was not accepted by server (check if camera scanned item first).");
       delay(2000);
     }
   }
 
-  delay(100);
+  delay(30);
 }
 
 // ============================================================================
@@ -240,7 +246,7 @@ bool sendDepositToServer(long weight, bool irState) {
 
     StaticJsonDocument<512> resDoc;
     DeserializationError err = deserializeJson(resDoc, response);
-    if (!err && resDoc["dispense"] == true) {
+    if (!err && resDoc["success"] == true) {
       success = true;
     }
   } else {
@@ -276,6 +282,16 @@ void sendHeartbeat(bool irState, long weight) {
         Serial.println("[TARE] Tare signal received from web dashboard. Zeroing scale...");
         scale.tare();
       }
+      if (resDoc["dispense_requested"] == true) {
+        Serial.println("[SERVO] 'Collect Reward' pressed on web! Dispensing physical receipt slip...");
+        dispenseRewardSlip();
+        isWaitingForCollect = false;
+        isWaitingForClear = true; // Lock duplicate deposits until bin path clears
+      }
+      const char* currentStep = resDoc["step"];
+      if (currentStep && strcmp(currentStep, "WAIT_FOR_CAMERA") == 0) {
+        isWaitingForCollect = false;
+      }
     }
   }
   http.end();
@@ -289,4 +305,3 @@ void dispenseRewardSlip() {
   dispenserServo.write(0);  // Return to home position
   delay(500);
 }
-
