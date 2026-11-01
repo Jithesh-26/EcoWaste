@@ -43,7 +43,7 @@
 const char* WIFI_SSID     = "Jithu's";
 const char* WIFI_PASSWORD = "jithu12345";
 
-// Your laptop's Wi-Fi IP address on your OnePlus Nord hotspot
+// Your laptop's Wi-Fi IP address
 const char* SERVER_HOST   = "10.251.76.170";
 const int   SERVER_PORT   = 5000;
 
@@ -65,7 +65,7 @@ const int PIN_SERVO     = 18; // GPIO 18 (D18) -> Servo Signal (Orange/Yellow)
 HX711 scale;
 Servo dispenserServo;
 
-// Calibration factor for 1kg load cell. Adjust this after weighing a known item.
+// Calibration factor for 1kg load cell
 float CALIBRATION_FACTOR = 420.0f;
 
 // State management
@@ -122,7 +122,6 @@ void loop() {
   }
 
   // Read Sensors
-  // Note: Most IR proximity sensors output LOW (0) when an object is detected
   bool irDetected = (digitalRead(PIN_IR_SENSOR) == LOW);
   long weightGrams = 0;
 
@@ -149,7 +148,7 @@ void loop() {
     sendHeartbeat(irDetected, weightGrams);
   }
 
-  // If waiting for the user to press "Collect Reward" on web, don't re-trigger deposit
+  // If waiting for user to click "Collect Reward" on web, don't trigger new deposit
   if (isWaitingForCollect) {
     delay(30);
     return;
@@ -159,7 +158,7 @@ void loop() {
   if (irDetected && weightGrams >= 10) {
     Serial.println("\n[BIN TRIGGER] Waste insertion detected!");
     Serial.print("  Stabilizing weight reading... ");
-    delay(1200); // Allow physical bouncing/settling
+    delay(1200); // Allow physical settling
 
     // Take average of 5 readings
     long finalWeight = (long)scale.get_units(5);
@@ -305,4 +304,3 @@ void dispenseRewardSlip() {
   dispenserServo.write(0);  // Return to home position
   delay(500);
 }
-
