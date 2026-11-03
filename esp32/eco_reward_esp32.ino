@@ -1,11 +1,11 @@
 /*
  ============================================================================
-  EcoReward Smart Bin — ESP32 Firmware
+  EcoReward Smart Bin — ESP32 Firmware (Continuous Live Scale & On-Demand Dispenser)
  ============================================================================
   Description:
-    Reads load cell weight (HX711) and IR proximity sensor, communicates
-    with the local Python EcoReward server over Wi-Fi, and rotates a servo
-    motor to dispense a printed paper reward slip.
+    Continuously streams live load cell weight (HX711) and IR proximity sensor
+    to the EcoReward server over Wi-Fi without any blocking delays, and rotates
+    the servo motor to dispense a paper reward slip when requested by the user.
 
   Required Arduino Libraries:
     - HX711 Arduino Library by Bogdan Necula (or Rob Tillaart)
@@ -48,7 +48,6 @@ const char* SERVER_HOST   = "10.251.76.170";
 const int   SERVER_PORT   = 5000;
 
 // API Endpoints
-String URL_DEPOSIT = String("http://") + SERVER_HOST + ":" + SERVER_PORT + "/api/hardware/deposit";
 String URL_STATUS  = String("http://") + SERVER_HOST + ":" + SERVER_PORT + "/api/hardware/status";
 
 // ============================================================================
@@ -65,14 +64,17 @@ const int PIN_SERVO     = 18; // GPIO 18 (D18) -> Servo Signal (Orange/Yellow)
 HX711 scale;
 Servo dispenserServo;
 
-// Calibration factor for 1kg load cell
+// Calibration factor for load cell
 float CALIBRATION_FACTOR = 420.0f;
 
-// State management
+// Continuous streaming interval
 unsigned long lastHeartbeatTime = 0;
-const unsigned long HEARTBEAT_INTERVAL_MS = 400; // Continuous live scale streaming (400ms)
-bool isWaitingForClear = false;
-bool isWaitingForCollect = false;
+const unsigned long HEARTBEAT_INTERVAL_MS = 500; // Continuous live stream every 500ms
+
+// Function prototypes
+void connectWiFi();
+void sendHeartbeat(bool irState, long weight);
+void dispenseRewardSlip();
 
 // ============================================================================
 // 4. SETUP
@@ -81,7 +83,7 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   Serial.println("\n=============================================");
-  Serial.println("  EcoReward Smart Bin - Starting Firmware");
+  Serial.println("  EcoReward Smart Bin - Continuous Live Scale");
   Serial.println("=============================================");
 
   // Pin Modes
@@ -92,11 +94,11 @@ void setup() {
   ESP32PWM::allocateTimer(1);
   dispenserServo.setPeriodHertz(50);
   dispenserServo.attach(PIN_SERVO, 500, 2400);
-  dispenserServo.write(0); // Rest position
+  dispenserServo.write(0); // Home position
   delay(500);
 
   // Initialize HX711 Load Cell
-  Serial.print("[HX711] Initializing scale on pins DT=");
+  Serial.print("[HX711] Initializing scale on DT=");
   Serial.print(PIN_HX711_DT);
   Serial.print(", SCK=");
   Serial.println(PIN_HX711_SCK);
@@ -104,83 +106,39 @@ void setup() {
   scale.begin(PIN_HX711_DT, PIN_HX711_SCK);
   scale.set_scale(CALIBRATION_FACTOR);
   scale.tare(); // Zero the scale
-  Serial.println("[HX711] Scale tared and ready!");
+  Serial.println("[HX711] Scale zeroed and ready!");
 
   // Connect to Wi-Fi
   connectWiFi();
 
-  Serial.println("[SYSTEM] Ready! Waiting for user waste deposit...");
+  Serial.println("[SYSTEM] Ready! Continuous weight streaming active.");
 }
 
 // ============================================================================
-// 5. MAIN LOOP
+// 5. MAIN LOOP — Continuous, non-blocking live measurement
 // ============================================================================
 void loop() {
-  // Check Wi-Fi connection
+  // 1. Maintain Wi-Fi connection
   if (WiFi.status() != WL_CONNECTED) {
     connectWiFi();
   }
 
-  // Read Sensors
+  // 2. Read Sensors (Zero delay)
   bool irDetected = (digitalRead(PIN_IR_SENSOR) == LOW);
   long weightGrams = 0;
 
   if (scale.is_ready()) {
-    weightGrams = (long)scale.get_units(1); // Fast single-read for responsive live streaming
-    if (weightGrams < 0) weightGrams = 0; // clamp negative noise
+    weightGrams = (long)scale.get_units(1); // Fast single-read
+    if (weightGrams < 0) weightGrams = 0;   // Clamp negative noise
   }
 
-  // Duplicate deposit protection: Wait until waste is removed before accepting new deposit
-  if (isWaitingForClear) {
-    if (!irDetected && weightGrams < 5) {
-      delay(800); // Debounce
-      scale.tare(); // Re-zero scale baseline
-      isWaitingForClear = false;
-      Serial.println("[STATE] Bin cleared and reset. Ready for next deposit!");
-    }
-    delay(200);
-    return;
-  }
-
-  // Periodic heartbeat status to server
-  if (millis() - lastHeartbeatTime > HEARTBEAT_INTERVAL_MS) {
+  // 3. Unconditionally stream live status & weight to server every 500ms
+  if (millis() - lastHeartbeatTime >= HEARTBEAT_INTERVAL_MS) {
     lastHeartbeatTime = millis();
     sendHeartbeat(irDetected, weightGrams);
   }
 
-  // If waiting for user to click "Collect Reward" on web, don't trigger new deposit
-  if (isWaitingForCollect) {
-    delay(30);
-    return;
-  }
-
-  // Trigger deposit process if IR detects waste insertion AND load cell has weight >= 10g
-  if (irDetected && weightGrams >= 10) {
-    Serial.println("\n[BIN TRIGGER] Waste insertion detected!");
-    Serial.print("  Stabilizing weight reading... ");
-    delay(1200); // Allow physical settling
-
-    // Take average of 5 readings
-    long finalWeight = (long)scale.get_units(5);
-    if (finalWeight < 10) finalWeight = weightGrams;
-
-    Serial.print("Final Net Weight: ");
-    Serial.print(finalWeight);
-    Serial.println(" g");
-
-    // Transmit to Python backend
-    bool processed = sendDepositToServer(finalWeight, irDetected);
-
-    if (processed) {
-      Serial.println("[DEPOSIT] Waste recorded! Waiting for user to click 'Collect Reward' on web dashboard...");
-      isWaitingForCollect = true;
-    } else {
-      Serial.println("[WARNING] Deposit was not accepted by server (check if camera scanned item first).");
-      delay(2000);
-    }
-  }
-
-  delay(30);
+  delay(20); // Small CPU yield
 }
 
 // ============================================================================
@@ -213,51 +171,7 @@ void connectWiFi() {
   }
 }
 
-// Send HTTP POST request when waste is inserted
-bool sendDepositToServer(long weight, bool irState) {
-  if (WiFi.status() != WL_CONNECTED) return false;
-
-  HTTPClient http;
-  http.begin(URL_DEPOSIT);
-  http.addHeader("Content-Type", "application/json");
-
-  // Construct JSON payload
-  StaticJsonDocument<200> reqDoc;
-  reqDoc["weight"] = weight;
-  reqDoc["ir_detected"] = irState;
-
-  String reqBody;
-  serializeJson(reqDoc, reqBody);
-
-  Serial.print("[HTTP POST] Sending payload to ");
-  Serial.println(URL_DEPOSIT);
-  Serial.print("  Body: ");
-  Serial.println(reqBody);
-
-  int httpCode = http.POST(reqBody);
-  bool success = false;
-
-  if (httpCode > 0) {
-    String response = http.getString();
-    Serial.print("[HTTP ");
-    Serial.print(httpCode);
-    Serial.println("] Response: " + response);
-
-    StaticJsonDocument<512> resDoc;
-    DeserializationError err = deserializeJson(resDoc, response);
-    if (!err && resDoc["success"] == true) {
-      success = true;
-    }
-  } else {
-    Serial.print("[HTTP ERROR] Failed POST: ");
-    Serial.println(http.errorToString(httpCode).c_str());
-  }
-
-  http.end();
-  return success;
-}
-
-// Send periodic heartbeat to keep the web UI monitor updated
+// Send periodic heartbeat to keep the web UI live scale updated
 void sendHeartbeat(bool irState, long weight) {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -284,22 +198,15 @@ void sendHeartbeat(bool irState, long weight) {
       if (resDoc["dispense_requested"] == true) {
         Serial.println("[SERVO] 'Collect Reward' pressed on web! Dispensing physical receipt slip...");
         dispenseRewardSlip();
-        isWaitingForCollect = false;
-        isWaitingForClear = true; // Lock duplicate deposits until bin path clears
-      }
-      const char* currentStep = resDoc["step"];
-      if (currentStep && strcmp(currentStep, "WAIT_FOR_CAMERA") == 0) {
-        isWaitingForCollect = false;
       }
     }
   }
   http.end();
 }
 
-// Dispense paper slip via servo rotation
+// Physical servo dispenser routine (Rotates ONLY after user clicks Collect Reward Slip on web)
 void dispenseRewardSlip() {
-  Serial.println("[SERVO] Rotating to push printed receipt slip...");
-  dispenserServo.write(90); // Rotate 90 degrees to push slip
+  dispenserServo.write(90); // Rotate to push paper slip out
   delay(1200);              // Allow slip to push out
   dispenserServo.write(0);  // Return to home position
   delay(500);

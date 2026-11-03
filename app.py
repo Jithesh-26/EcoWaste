@@ -340,7 +340,11 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
 
     def api_hardware_deposit(self):
         payload = self.json_data()
+        HARDWARE_STATE["last_heartbeat"] = time.time()
+        HARDWARE_STATE["esp32_connected"] = True
         weight = int(payload.get("weight", 0))
+        if weight <= 0:
+            weight = int(HARDWARE_STATE.get("current_weight_g", 0))
         ir_detected = bool(payload.get("ir_detected", True))
         is_demo = bool(payload.get("demo", False))
 
@@ -349,7 +353,7 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             self.send_json({
                 "success": False,
                 "dispense": False,
-                "message": "Deposit already in progress or completed. Clear bin to scan next item."
+                "message": "Deposit already confirmed. Please collect reward slip first."
             }, status=409)
             return
 
@@ -369,7 +373,7 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             self.send_json({
                 "success": False,
                 "dispense": False,
-                "message": f"Invalid weight ({weight}g). Weight must be between 5g and 10,000g."
+                "message": f"Place item on scale first (current: {weight}g). Weight must be at least 5g."
             }, status=400)
             return
 

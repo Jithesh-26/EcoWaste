@@ -296,16 +296,21 @@ async function pollHardwareStatus() {
         const estPoints = Math.max(1, Math.round((curWeight * RATES[activeCategory] + 50) / 100));
         if (scaleEst) scaleEst.innerHTML = `<span style="color:#16794c;">+${estPoints} pts</span> <span style="font-size:0.85rem; font-weight:normal; color:#64748b;">(${activeCategory}: ${RATES[activeCategory]} pts/100g)</span>`;
         if (btnConfirm) btnConfirm.disabled = false;
-        if (guidanceText) guidanceText.innerHTML = `<strong>Item on scale:</strong> ${curWeight}g of ${activeCategory}. Drop detected or click Confirm below!`;
+        if (guidanceText) guidanceText.innerHTML = `<strong>Item on scale:</strong> ${curWeight}g of ${activeCategory}. Click <strong>Confirm Deposit</strong> to proceed!`;
       } else {
         if (scaleEst) scaleEst.innerHTML = `<span style="color:#64748b; font-size:1rem; font-weight:600;">Place item on scale...</span>`;
         if (btnConfirm) btnConfirm.disabled = true;
-        if (guidanceText) guidanceText.innerHTML = `<strong>Category locked: ${activeCategory}.</strong> Place item on the scale / into the bin.`;
+        if (guidanceText) guidanceText.innerHTML = `<strong>Category locked: ${activeCategory}.</strong> Place item on the scale.`;
       }
     } else {
-      if (scaleEst) scaleEst.innerHTML = `<span style="color:#94a3b8; font-size:0.92rem; font-weight:normal;">Scan item with camera first</span>`;
+      if (curWeight >= 5) {
+        if (scaleEst) scaleEst.innerHTML = `<span style="color:#b45309; font-size:0.92rem; font-weight:600;">Item on scale (${curWeight}g) — Scan item to proceed</span>`;
+        if (guidanceText) guidanceText.innerHTML = `<strong>Item on scale:</strong> ${curWeight}g. Show item to camera above to identify category.`;
+      } else {
+        if (scaleEst) scaleEst.innerHTML = `<span style="color:#94a3b8; font-size:0.92rem; font-weight:normal;">Scan item with camera first</span>`;
+        if (guidanceText) guidanceText.textContent = "Show item to camera above to lock category, then place item on the scale.";
+      }
       if (btnConfirm) btnConfirm.disabled = true;
-      if (guidanceText && !curWeight) guidanceText.textContent = "Show item to camera above to lock the category, then place item into the bin intake.";
     }
 
     // Pending Type
@@ -482,13 +487,22 @@ async function collectReward() {
 
 async function confirmCurrentScaleDeposit() {
   const btnConfirm = document.getElementById("btn-confirm-deposit");
-  if (btnConfirm) btnConfirm.disabled = true;
+  if (btnConfirm) {
+    btnConfirm.disabled = true;
+    btnConfirm.innerHTML = `⏳ Confirming Deposit...`;
+  }
+
+  const digitalVal = document.getElementById("digital-scale-value");
+  const weight = digitalVal ? (parseInt(digitalVal.textContent, 10) || 0) : 0;
 
   try {
     const res = await fetch("/api/hardware/deposit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ir_detected: true })
+      body: JSON.stringify({
+        weight: weight,
+        ir_detected: true
+      })
     });
     const data = await res.json();
     if (data.success) {
@@ -501,6 +515,10 @@ async function confirmCurrentScaleDeposit() {
   } catch (e) {
     alert("Could not communicate with backend.");
     if (btnConfirm) btnConfirm.disabled = false;
+  } finally {
+    if (btnConfirm) {
+      btnConfirm.innerHTML = `📥 Confirm Deposit`;
+    }
   }
 }
 
