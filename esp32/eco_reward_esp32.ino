@@ -1,11 +1,13 @@
 /*
  ============================================================================
   EcoReward Smart Bin — ESP32 Firmware (Continuous Live Scale & On-Demand Dispenser)
+  ECE Department — Real-Time Sensor Telemetry & Actuation
  ============================================================================
   Description:
     Continuously streams live load cell weight (HX711) and IR proximity sensor
-    to the EcoReward server over Wi-Fi without any blocking delays, and rotates
-    the servo motor to dispense a paper reward slip when requested by the user.
+    to the EcoReward server over Wi-Fi, prints exact real-time telemetry to the
+    Serial Monitor for hardware-software synchronization review, and rotates the
+    servo motor to dispense a paper reward slip when requested by the user.
 
   Required Arduino Libraries:
     - HX711 Arduino Library by Bogdan Necula (or Rob Tillaart)
@@ -82,9 +84,10 @@ void dispenseRewardSlip();
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n=============================================");
-  Serial.println("  EcoReward Smart Bin - Continuous Live Scale");
-  Serial.println("=============================================");
+  Serial.println("\n=============================================================");
+  Serial.println("  EcoReward Smart Bin — IoT Embedded Hardware Subsystem");
+  Serial.println("  ECE Department — Live Sensor & Actuator Telemetry");
+  Serial.println("=============================================================");
 
   // Pin Modes
   pinMode(PIN_IR_SENSOR, INPUT);
@@ -96,22 +99,27 @@ void setup() {
   dispenserServo.attach(PIN_SERVO, 500, 2400);
   dispenserServo.write(0); // Home position
   delay(500);
+  Serial.println("[SERVO] SG90/MG90S Servo attached on GPIO 18 (Rest at 0 deg).");
 
   // Initialize HX711 Load Cell
-  Serial.print("[HX711] Initializing scale on DT=");
+  Serial.print("[HX711] Initializing 24-bit ADC on DT=GPIO ");
   Serial.print(PIN_HX711_DT);
-  Serial.print(", SCK=");
+  Serial.print(", SCK=GPIO ");
   Serial.println(PIN_HX711_SCK);
   
   scale.begin(PIN_HX711_DT, PIN_HX711_SCK);
   scale.set_scale(CALIBRATION_FACTOR);
   scale.tare(); // Zero the scale
-  Serial.println("[HX711] Scale zeroed and ready!");
+  Serial.print("[HX711] Calibration factor: ");
+  Serial.print(CALIBRATION_FACTOR);
+  Serial.println(" | Tare offset calibrated to 0 g.");
 
   // Connect to Wi-Fi
   connectWiFi();
 
-  Serial.println("[SYSTEM] Ready! Continuous weight streaming active.");
+  Serial.println("=============================================================");
+  Serial.println("[READY] Real-time sensor telemetry streaming to Web Dashboard:");
+  Serial.println("=============================================================\n");
 }
 
 // ============================================================================
@@ -171,7 +179,7 @@ void connectWiFi() {
   }
 }
 
-// Send periodic heartbeat to keep the web UI live scale updated
+// Send periodic heartbeat to keep the web UI live scale updated & print to Serial Monitor
 void sendHeartbeat(bool irState, long weight) {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -187,16 +195,31 @@ void sendHeartbeat(bool irState, long weight) {
   serializeJson(reqDoc, reqBody);
 
   int httpCode = http.POST(reqBody);
+
+  // ECE Review Serial Print: Formats exact live load cell & IR readings for professor review
+  Serial.print("[SCALE STREAM] Measured Weight: ");
+  Serial.print(weight);
+  Serial.print(" g | IR Sensor: ");
+  Serial.print(irState ? "OBJECT DETECTED [LOW]" : "BEAM CLEAR [HIGH]");
+  Serial.print(" | Web Sync: ");
+  if (httpCode == 200) {
+    Serial.println("OK (HTTP 200)");
+  } else {
+    Serial.print("HTTP ");
+    Serial.println(httpCode);
+  }
+
   if (httpCode == 200) {
     String response = http.getString();
     StaticJsonDocument<256> resDoc;
     if (!deserializeJson(resDoc, response)) {
       if (resDoc["tare_requested"] == true) {
-        Serial.println("[TARE] Tare signal received from web dashboard. Zeroing scale...");
+        Serial.println("\n>>> [TARE ZERO] Web UI requested tare zero. Zeroing HX711 scale baseline...");
         scale.tare();
+        Serial.println(">>> [TARE ZERO] Scale baseline reset to 0 g successfully!\n");
       }
       if (resDoc["dispense_requested"] == true) {
-        Serial.println("[SERVO] 'Collect Reward' pressed on web! Dispensing physical receipt slip...");
+        Serial.println("\n>>> [SERVO MOTOR] User clicked 'Collect Reward Slip' on Web Dashboard!");
         dispenseRewardSlip();
       }
     }
@@ -206,8 +229,11 @@ void sendHeartbeat(bool irState, long weight) {
 
 // Physical servo dispenser routine (Rotates ONLY after user clicks Collect Reward Slip on web)
 void dispenseRewardSlip() {
+  Serial.println(">>> [SERVO MOTOR] Rotating Servo: 0 deg -> 90 deg (Dispensing paper slip)...");
   dispenserServo.write(90); // Rotate to push paper slip out
   delay(1200);              // Allow slip to push out
+  Serial.println(">>> [SERVO MOTOR] Returning Servo: 90 deg -> 0 deg (Home rest position)...");
   dispenserServo.write(0);  // Return to home position
   delay(500);
+  Serial.println(">>> [SERVO MOTOR] Dispense cycle complete!\n");
 }
