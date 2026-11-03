@@ -82,70 +82,74 @@ async function classifyCurrentFrame() {
   if (classifyBtn) classifyBtn.innerHTML = `⏳ Analyzing Image Frame...`;
 
   try {
-    const predictions = await mobilenetModel.classify(videoElem);
+    const predictions = await mobilenetModel.classify(videoElem, 5);
     if (classifyBtn) classifyBtn.innerHTML = `🎯 Scan & Classify Waste Item`;
 
+    // 1-Click Classification Strategy:
+    // If it clearly matches Plastic, Metal, or Paper -> assign that category.
+    // If it cannot classify or is anything else -> instantly assign "Other".
+    let matchedCategory = "Other";
+
     if (predictions && predictions.length > 0) {
-      const topPred = predictions[0];
-      const confidence = Math.round(topPred.probability * 100);
-      const rawLabel = topPred.className.split(",")[0].trim();
-      const matchedCategory = mapPredictionToCategory(topPred.className.toLowerCase());
-
-      if (badge) badge.style.display = "block";
-      if (categoryDiv) categoryDiv.innerHTML = `Category: <strong style="color: #16794c;">${matchedCategory}</strong>`;
-      if (rateDiv) rateDiv.innerHTML = `Reward Rate: <strong>${RATES[matchedCategory]} pts / 100g</strong>`;
-
-      // Classification Check
-      if (confidence >= 70) {
-        badge.style.background = "#edf8f0";
-        badge.style.border = "1px solid #22c55e";
-        if (statusPill) {
-          statusPill.style.background = "#22c55e";
-          statusPill.style.color = "#ffffff";
-          statusPill.textContent = "✅ Identified";
-        }
-        if (confPill) {
-          confPill.style.display = "none";
-        }
-        if (instructionDiv) {
-          instructionDiv.innerHTML = `<span style="color: #16794c; font-weight: 700;">Ready for Step 2:</span> Category identified: <strong>${matchedCategory}</strong>. Please place item inside the smart bin.`;
-        }
-
-        // Lock pending category on backend
-        await registerPendingDeposit(matchedCategory, confidence);
-
-        // Advance visual step indicator
-        setStepIndicator(2);
-
-        // Activate and scroll to Step 2 Digital Scale
-        const scaleCard = document.getElementById("scale-card");
-        if (scaleCard) {
-          scaleCard.classList.add("active-scale", "scale-pulse");
-          scaleCard.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-        const guidance = document.getElementById("scale-guidance-text");
-        if (guidance) {
-          guidance.innerHTML = `<strong>Category identified: ${matchedCategory}</strong>. Please place your waste item into the smart bin intake.`;
-        }
+      const topCategory = mapPredictionToCategory(predictions[0].className);
+      if (topCategory !== "Other") {
+        matchedCategory = topCategory;
       } else {
-        badge.style.background = "#fffbeb";
-        badge.style.border = "1px solid #f59e0b";
-        if (statusPill) {
-          statusPill.style.background = "#f59e0b";
-          statusPill.style.color = "#ffffff";
-          statusPill.textContent = "⚠️ Not Clear";
-        }
-        if (confPill) {
-          confPill.style.display = "none";
-        }
-        if (instructionDiv) {
-          instructionDiv.innerHTML = `<span style="color: #b45309; font-weight: 700;">Please show item again:</span> Hold item clearly in front of the camera and click Scan.`;
+        // Check next top candidates for Plastic/Metal/Paper match
+        for (let i = 1; i < Math.min(predictions.length, 3); i++) {
+          const candidateCat = mapPredictionToCategory(predictions[i].className);
+          if (candidateCat !== "Other" && predictions[i].probability >= 0.15) {
+            matchedCategory = candidateCat;
+            break;
+          }
         }
       }
-
-      // Pre-fill manual backup form
-      prefillForm(matchedCategory, 250);
     }
+
+    // In 1 single click, immediately lock the result (Plastic, Metal, Paper, OR Other)
+    if (badge) {
+      badge.style.display = "block";
+      badge.style.background = "#edf8f0";
+      badge.style.border = "1px solid #22c55e";
+    }
+    if (statusPill) {
+      statusPill.style.background = "#22c55e";
+      statusPill.style.color = "#ffffff";
+      statusPill.textContent = "✅ Identified";
+    }
+    if (confPill) {
+      confPill.style.display = "none";
+    }
+    if (categoryDiv) {
+      categoryDiv.innerHTML = `Category: <strong style="color: #16794c;">${matchedCategory}</strong>`;
+    }
+    if (rateDiv) {
+      rateDiv.innerHTML = `Reward Rate: <strong>${RATES[matchedCategory] || 1} pts / 100g</strong>`;
+    }
+    if (instructionDiv) {
+      instructionDiv.innerHTML = `<span style="color: #16794c; font-weight: 700;">Ready for Step 2:</span> Category identified: <strong>${matchedCategory}</strong>. Please place item inside the smart bin.`;
+    }
+
+    // Lock pending category on backend
+    await registerPendingDeposit(matchedCategory, 100);
+
+    // Advance visual step indicator to Step 2
+    setStepIndicator(2);
+
+    // Activate and smoothly scroll to Step 2 Digital Scale
+    const scaleCard = document.getElementById("scale-card");
+    if (scaleCard) {
+      scaleCard.classList.add("active-scale", "scale-pulse");
+      scaleCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    const guidance = document.getElementById("scale-guidance-text");
+    if (guidance) {
+      guidance.innerHTML = `<strong>Category identified: ${matchedCategory}</strong>. Please place your waste item into the smart bin intake.`;
+    }
+
+    // Pre-fill manual backup form
+    prefillForm(matchedCategory, 250);
+
   } catch (err) {
     console.error("Frame classification error:", err);
     if (classifyBtn) classifyBtn.innerHTML = `🎯 Scan & Classify Waste Item`;
@@ -153,21 +157,29 @@ async function classifyCurrentFrame() {
 }
 
 function mapPredictionToCategory(label) {
+  if (!label) return "Other";
   label = label.toLowerCase();
   
   // Plastic keywords
   if (label.includes("bottle") || label.includes("water bottle") || label.includes("pop bottle") || 
       label.includes("plastic") || label.includes("container") || label.includes("bucket") || 
       label.includes("tub") || label.includes("cup") || label.includes("beaker") || 
-      label.includes("lotion") || label.includes("sunscreen") || label.includes("shampoo")) {
+      label.includes("lotion") || label.includes("sunscreen") || label.includes("shampoo") ||
+      label.includes("jug") || label.includes("flask") || label.includes("pitcher") ||
+      label.includes("measuring cup") || label.includes("vial") || label.includes("soap dispenser") ||
+      label.includes("polyethylene") || label.includes("straw") || label.includes("bag")) {
     return "Plastic";
   }
   
   // Metal keywords
   if (label.includes("can") || label.includes("tin") || label.includes("beer") || 
       label.includes("metal") || label.includes("aluminum") || label.includes("brass") || 
+      label.includes("steel") || label.includes("copper") || label.includes("iron") ||
       label.includes("kettle") || label.includes("pan") || label.includes("pot") || 
-      label.includes("corkscrew") || label.includes("hammer") || label.includes("nail")) {
+      label.includes("corkscrew") || label.includes("hammer") || label.includes("nail") ||
+      label.includes("screw") || label.includes("wrench") || label.includes("scissors") ||
+      label.includes("spoon") || label.includes("fork") || label.includes("knife") ||
+      label.includes("foil") || label.includes("thimble") || label.includes("cork")) {
     return "Metal";
   }
   
@@ -175,7 +187,10 @@ function mapPredictionToCategory(label) {
   if (label.includes("paper") || label.includes("carton") || label.includes("cardboard") || 
       label.includes("box") || label.includes("envelope") || label.includes("book") || 
       label.includes("journal") || label.includes("notebook") || label.includes("newspaper") || 
-      label.includes("tissue") || label.includes("towel") || label.includes("packet")) {
+      label.includes("tissue") || label.includes("towel") || label.includes("packet") ||
+      label.includes("magazine") || label.includes("pamphlet") || label.includes("flyer") ||
+      label.includes("ticket") || label.includes("napkin") || label.includes("wrapper") ||
+      label.includes("menu") || label.includes("binder") || label.includes("postcard")) {
     return "Paper";
   }
 
