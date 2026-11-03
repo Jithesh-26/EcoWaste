@@ -32,8 +32,13 @@ async function initAiClassifier() {
 
   try {
     if (typeof mobilenet !== "undefined") {
-      mobilenetModel = await mobilenet.load();
-      if (statusDiv) statusDiv.innerHTML = `✅ AI MobileNet Vision Model Ready!`;
+      if (statusDiv) statusDiv.innerHTML = `⏳ Loading local AI model (Offline)...`;
+      mobilenetModel = await mobilenet.load({
+        version: 1,
+        alpha: 1.0,
+        modelUrl: "/static/models/mobilenet/model.json"
+      });
+      if (statusDiv) statusDiv.innerHTML = `✅ AI Vision Model Ready (100% Offline)`;
       if (classifyBtn) classifyBtn.disabled = false;
       setupAiWebcam();
     } else {

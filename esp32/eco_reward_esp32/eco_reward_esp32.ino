@@ -1,6 +1,6 @@
 /*
  ============================================================================
-  EcoReward Smart Bin — ESP32 Firmware (No Buzzer)
+  EcoReward Smart Bin — ESP32 Firmware
  ============================================================================
   Description:
     Reads load cell weight (HX711) and IR proximity sensor, communicates

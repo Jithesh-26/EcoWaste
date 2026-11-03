@@ -184,8 +184,19 @@ class EcoRewardHandler(BaseHTTPRequestHandler):
             if path.startswith("/static/"):
                 asset = ROOT / path.lstrip("/")
                 if asset.is_file() and ROOT in asset.resolve().parents:
-                    types = {".css": "text/css", ".js": "application/javascript"}
-                    self.send_response(200); self.send_header("Content-Type", types.get(asset.suffix, "application/octet-stream")); self.end_headers(); self.wfile.write(asset.read_bytes())
+                    types = {
+                        ".css": "text/css",
+                        ".js": "application/javascript",
+                        ".json": "application/json",
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".svg": "image/svg+xml"
+                    }
+                    self.send_response(200)
+                    self.send_header("Content-Type", types.get(asset.suffix.lower(), "application/octet-stream"))
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(asset.read_bytes())
                 else:
                     self.send_error(404)
                 return
